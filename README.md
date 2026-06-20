@@ -61,7 +61,7 @@ set -a; . ./.env.local; set +a
 | engineerpro | RSS latest (Substack) | ✅ |
 | dailydev | GraphQL `anonymousFeed` | ⚠️ works, but the *anonymous* feed is a frozen "all-time popular" set with stale dates — so the recency window is disabled and it shows a static top-5 by upvotes. Drop the source if you don't want that. |
 | spiderum | category page scrape | ✅ but the SSR only renders a few posts; low-volume by nature. |
-| voz | sorted XenForo listing | ⚠️ Cloudflare returns **403** from this network. The fetcher tolerates it and skips voz. Set a real `<slug>.<id>` in `sources.yaml` and verify from your own IP; it may work for you (this is the residential-vs-datacenter caveat in the spec). |
+| voz | sorted HTML listing → RSS fallback | ✅ via RSS as **Latest**. The ranked HTML listing is behind a Cloudflare JS challenge (403, unsolvable by a plain HTTP client — and worse on GitHub Actions' datacenter IPs). The fetcher auto-falls back to the per-forum RSS, which is *not* challenged but is chronological — so voz shows up as "Latest", not "Top by views". Ranked HTML only works from a residential IP via a real browser. |
 
 A typical run yields ~35–40 items. Each source is wrapped in try/except so one
 failure never aborts the run.

@@ -12,12 +12,14 @@ IPs. We retry with a browser-like UA, and on persistent block we return [] so
 the run continues (the fetcher tolerates per-source failure).
 """
 import re
+import feedparser
 from bs4 import BeautifulSoup
 
 from ..http import get
-from ..util import parse_date
+from ..util import parse_date, struct_time_to_utc
 
 BASE = "https://voz.vn/f/{forum}/?order={order}&direction=desc"
+RSS = "https://voz.vn/f/{forum}/index.rss"
 
 
 def _int(text):
@@ -87,19 +89,64 @@ def _parse(html, forum):
     return items
 
 
+def _from_rss(forum):
+    """Fallback: the per-forum RSS is NOT behind Cloudflare's challenge, but it
+    is chronological (no view counts). Returns latest threads, score=None.
+    """
+    resp = get(RSS.format(forum=forum), timeout=25, browser=True)
+    resp.raise_for_status()
+    feed = feedparser.parse(resp.content)
+    items = []
+    for e in feed.entries:
+        link = e.get("link")
+        title = (e.get("title") or "").strip()
+        if not link or not title:
+            continue
+        items.append({
+            "url": link,
+            "title": title,
+            "source_detail": f"voz · {feed.feed.get('title') or forum}",
+            "published_at": struct_time_to_utc(e.get("published_parsed"))
+                            or parse_date(e.get("published")),
+            "score": None,
+            "score_type": None,
+        })
+    return items
+
+
 def fetch(cfg):
     rank_by = cfg.get("rank_by", "views")
     order = "view_count" if rank_by == "views" else "reply_count"
     all_items = []
+    html_items = 0
     for forum in cfg.get("forums", []):
         if "REPLACE_WITH" in forum:
             print(f"[voz] skipping placeholder forum {forum!r}; set a real slug.id")
             continue
+        # 1) Try the SORTED HTML listing (ranked by views). voz fronts this with
+        #    a Cloudflare JS challenge that a plain HTTP client can't solve, so
+        #    this usually fails — we then fall back to the per-forum RSS.
         try:
-            html = _fetch_html(forum, order)
-            parsed = _parse(html, forum)
-            print(f"[voz] {forum}: parsed {len(parsed)} threads")
-            all_items.extend(parsed)
+            parsed = _parse(_fetch_html(forum, order), forum)
+            if parsed:
+                print(f"[voz] {forum}: parsed {len(parsed)} threads (ranked HTML)")
+                all_items.extend(parsed)
+                html_items += len(parsed)
+                continue
+            print(f"[voz] {forum}: HTML listing empty; trying RSS")
         except Exception as exc:
-            print(f"[voz] {forum} failed: {exc}")
+            print(f"[voz] {forum}: HTML blocked ({exc}); falling back to RSS")
+        # 2) RSS fallback — chronological, so this source becomes 'Latest'.
+        try:
+            rss = _from_rss(forum)
+            print(f"[voz] {forum}: {len(rss)} threads from RSS (chronological)")
+            all_items.extend(rss)
+        except Exception as exc:
+            print(f"[voz] {forum}: RSS also failed: {exc}")
+
+    # If nothing came from the ranked HTML path, the data is chronological —
+    # relabel honestly as 'Latest' (mirrors the dailydev GraphQL->RSS fallback).
+    if all_items and html_items == 0:
+        cfg["rank"] = "latest"
+        cfg["label"] = "Latest"
     return all_items

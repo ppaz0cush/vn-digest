@@ -18,8 +18,13 @@ sources:
     # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
     # Default below targets the "Điểm báo" (press/news) section. The generic
     # site-wide feed is a noisy firehose — target tech/IT/news sections.
-    # NOTE: voz sits behind Cloudflare and may return 403 from some IPs; the
-    # fetcher tolerates this and simply skips voz when blocked.
+    # NOTE: the SORTED HTML listing (ranked by views) sits behind a Cloudflare
+    # JS "managed challenge" that a plain HTTP client cannot solve (it returns
+    # 403 here and will on GitHub Actions too). The fetcher automatically falls
+    # back to the per-forum RSS (https://voz.vn/f/<slug>.<id>/index.rss), which
+    # is NOT challenged — but it is chronological, so voz then becomes a
+    # 'Latest' source (the 'Top'/'rank_by: views' config below only applies if
+    # the HTML listing ever succeeds, e.g. from a residential IP + browser).
     forums:
       - "diem-bao.33"
     rank: top
