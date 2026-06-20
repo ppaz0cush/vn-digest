@@ -12,7 +12,11 @@ PY=.venv/bin/python
 PORT="${PORT:-8000}"
 
 echo "▶ supabase start"
-supabase start >/dev/null 2>&1 || supabase start
+if supabase status >/dev/null 2>&1; then
+  echo "  (already running)"
+else
+  supabase start
+fi
 
 if [ "${1:-}" = "--reset" ]; then
   echo "▶ db reset (applies migrations)"
