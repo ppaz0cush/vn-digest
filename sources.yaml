@@ -1,0 +1,89 @@
+# Vietnamese Tech Digest — source configuration.
+#
+# THIS FILE is the "add/delete forums" mechanism. To add a voz sub-forum or
+# another feed, edit this file and commit. The fetcher reads it on every run.
+#
+# Recency windows follow the rule:
+#   - high-volume + ranked sources use a SHORT window (~previous day) so you get
+#     TODAY's most-discussed, not week-old posts (engagement counts accumulate
+#     over time, so a long window surfaces stale items).
+#   - low-volume "get all" sources use a LONG window (7-14 days) so the section
+#     is not empty on days they didn't post.
+# Adjust window_hours / max_items per source freely.
+
+sources:
+  - name: voz
+    strategy: voz_html
+    # Set the sub-forum(s) you want. Find the slug.id by opening the sub-forum on
+    # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
+    # Default below targets the "Điểm báo" (press/news) section. The generic
+    # site-wide feed is a noisy firehose — target tech/IT/news sections.
+    # NOTE: voz sits behind Cloudflare and may return 403 from some IPs; the
+    # fetcher tolerates this and simply skips voz when blocked.
+    forums:
+      - "diem-bao.33"
+    rank: top
+    rank_by: views          # 'views' is harder to game than 'replies' (bumping)
+    window_hours: 48        # threads ACTIVE in the last 48h
+    max_items: 10
+    label: "Top"
+
+  - name: dailydev
+    strategy: dailydev_graphql
+    rank: top
+    rank_by: upvotes
+    # NOTE: daily.dev's UNAUTHENTICATED anonymousFeed returns a frozen/cached
+    # "all-time popular" set with stale createdAt values (not a live daily feed).
+    # A recency window would therefore empty it, so we disable the window and
+    # simply take the top-N by upvotes. The dates shown will be old — this is the
+    # honest behavior of the free anonymous endpoint. Drop this source if you
+    # don't want a static top-5.
+    window_hours: null      # no recency filter (see note above)
+    max_items: 5
+    label: "Top"
+
+  - name: tinhte
+    strategy: rss_comments
+    url: "https://tinhte.vn/rss"
+    rank: top
+    rank_by: comments       # comment count is in the RSS via <slash:comments>
+    tiebreak: published_desc
+    window_hours: 48
+    max_items: 10
+    label: "Top"
+
+  - name: vnexpress
+    strategy: vnexpress
+    url: "https://vnexpress.net/rss/so-hoa.rss"
+    rank: top
+    rank_by: comments       # via the comment-count API (RSS has no counts)
+    tiebreak: published_desc
+    window_hours: 48
+    max_items: 10
+    label: "Top"
+
+  - name: anonyviet
+    strategy: rss_latest
+    url: "https://anonyviet.com/feed/"
+    rank: latest
+    window_hours: 168       # 7 days (low volume)
+    max_items: 10
+    label: "Latest"
+
+  - name: spiderum
+    strategy: spiderum
+    # CONFIRMED scope: the "Quan điểm - Tranh luận" category only.
+    category_url: "https://spiderum.com/danh-muc/quan-diem-tranh-luan?sort=new&page_idx=1"
+    post_url_pattern: "https://spiderum.com/bai-dang/{slug}"
+    rank: latest
+    window_hours: 168
+    max_items: 10
+    label: "Latest"
+
+  - name: engineerpro
+    strategy: rss_latest
+    url: "https://engineerprovn.substack.com/feed"
+    rank: latest
+    window_hours: 336       # 14 days — they post only ~2-3x/week
+    max_items: 10
+    label: "Latest"

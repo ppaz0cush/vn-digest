@@ -1,0 +1,41 @@
+name: deploy-pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      # Generate the client-safe config.js from repo variables (set by
+      # setup/provision.sh). The anon key is public by design + RLS-protected.
+      - name: Write site/config.js
+        run: |
+          cat > site/config.js <<EOF
+          window.SUPABASE_URL="${{ vars.SUPABASE_URL }}";
+          window.SUPABASE_ANON_KEY="${{ vars.SUPABASE_ANON_KEY }}";
+          EOF
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site            # serve the static reader app
+      - id: deployment
+        uses: actions/deploy-pages@v4

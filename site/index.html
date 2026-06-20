@@ -1,0 +1,49 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VN Tech Digest</title>
+<link rel="stylesheet" href="style.css">
+
+<!-- Login screen -->
+<div id="login" class="login hidden">
+  <form id="login-form" class="login-card">
+    <h1>VN Tech Digest</h1>
+    <p class="muted">Đăng nhập để xem digest hôm nay.</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Mật khẩu" autocomplete="current-password" required>
+    <button type="submit">Đăng nhập</button>
+    <p id="login-error" class="error"></p>
+  </form>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-left">
+      <strong>VN Tech Digest</strong>
+      <nav class="views">
+        <button data-view="today" class="active">Hôm nay</button>
+        <button data-view="archive">Lưu trữ</button>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <label class="toggle">
+        <input type="checkbox" id="hide-read"> Ẩn đã đọc
+      </label>
+      <button id="mark-all" class="ghost">Đánh dấu tất cả đã đọc</button>
+      <span id="counts" class="muted"></span>
+      <button id="logout" class="ghost">Thoát</button>
+    </div>
+  </header>
+
+  <div id="archive-bar" class="archive-bar hidden">
+    <input id="search" type="search" placeholder="Tìm trong tiêu đề…">
+  </div>
+
+  <main id="feed" class="feed"></main>
+  <div id="empty" class="empty hidden">Hết bài — bạn đã xử lý xong! 🎉</div>
+  <div id="loading" class="loading">Đang tải…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
