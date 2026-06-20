@@ -61,7 +61,7 @@ set -a; . ./.env.local; set +a
 | engineerpro | RSS latest (Substack) | ✅ |
 | dailydev | GraphQL `anonymousFeed` | ⚠️ works, but the *anonymous* feed is a frozen "all-time popular" set with stale dates — so the recency window is disabled and it shows a static top-5 by upvotes. Drop the source if you don't want that. |
 | spiderum | category page scrape | ✅ but the SSR only renders a few posts; low-volume by nature. |
-| voz | sorted HTML listing → RSS fallback | ✅ via RSS as **Latest**. The ranked HTML listing is behind a Cloudflare JS challenge (403, unsolvable by a plain HTTP client — and worse on GitHub Actions' datacenter IPs). The fetcher auto-falls back to the per-forum RSS, which is *not* challenged but is chronological — so voz shows up as "Latest", not "Top by views". Ranked HTML only works from a residential IP via a real browser. |
+| voz | headless browser (ranked) → RSS fallback | ✅ **Top by views**. voz fronts its HTML behind a Cloudflare JS challenge that plain HTTP can't solve, so the fetcher drives a headless **Playwright/Chromium** (which runs the challenge JS), takes the recently-active threads and ranks them by views/replies, excluding pinned megathreads. If Playwright is missing or the challenge isn't solved (possible on some Actions IPs), it auto-falls back to voz RSS as chronological "Latest". Toggle with `use_browser` / `rank_by` in `sources.yaml`. |
 
 A typical run yields ~35–40 items. Each source is wrapped in try/except so one
 failure never aborts the run.

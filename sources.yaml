@@ -18,18 +18,20 @@ sources:
     # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
     # Default below targets the "Điểm báo" (press/news) section. The generic
     # site-wide feed is a noisy firehose — target tech/IT/news sections.
-    # NOTE: the SORTED HTML listing (ranked by views) sits behind a Cloudflare
-    # JS "managed challenge" that a plain HTTP client cannot solve (it returns
-    # 403 here and will on GitHub Actions too). The fetcher automatically falls
-    # back to the per-forum RSS (https://voz.vn/f/<slug>.<id>/index.rss), which
-    # is NOT challenged — but it is chronological, so voz then becomes a
-    # 'Latest' source (the 'Top'/'rank_by: views' config below only applies if
-    # the HTML listing ever succeeds, e.g. from a residential IP + browser).
+    # voz fronts its HTML listing with a Cloudflare JS "managed challenge" that
+    # plain HTTP (requests/curl) cannot solve. We drive a headless browser
+    # (Playwright/Chromium) which executes the challenge JS, then rank the
+    # recently-active threads by views/replies client-side -> real 'Top by
+    # views'. If Playwright is missing or the challenge isn't solved, the fetcher
+    # falls back to the per-forum RSS (chronological) and relabels voz 'Latest'.
+    # Enable ranked voz:  pip install playwright && python -m playwright install chromium
+    use_browser: true       # set false to use RSS only (no browser dependency)
+    skip_sticky: true       # ignore pinned megathreads (they'd top views forever)
     forums:
       - "diem-bao.33"
     rank: top
     rank_by: views          # 'views' is harder to game than 'replies' (bumping)
-    window_hours: 48        # threads ACTIVE in the last 48h
+    window_hours: 48        # rank among threads ACTIVE in the last 48h
     max_items: 10
     label: "Top"
 

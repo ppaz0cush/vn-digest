@@ -26,6 +26,10 @@ fi
 echo "▶ ensure single user ($MY_EMAIL)"
 SERVICE_KEY="$SUPABASE_SERVICE_ROLE_KEY" "$PY" setup/create_user.py >/dev/null 2>&1 || true
 
+echo "▶ ensure Chromium for ranked voz (idempotent; skip if use_browser:false)"
+"$PY" -m playwright install chromium >/dev/null 2>&1 || \
+  echo "  (playwright/chromium not installed — voz will use its RSS fallback)"
+
 echo "▶ fetch sources -> local DB"
 "$PY" -m fetcher.main
 

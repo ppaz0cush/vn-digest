@@ -4,3 +4,8 @@ beautifulsoup4>=4.12
 lxml>=5.0
 python-dateutil>=2.9
 PyYAML>=6.0
+# Headless browser for voz (solves its Cloudflare JS challenge to get ranked
+# views/replies). After install run: python -m playwright install chromium
+# If you don't want voz ranked, set use_browser:false in sources.yaml — voz then
+# uses RSS and you can drop this dependency.
+playwright>=1.40

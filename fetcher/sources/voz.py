@@ -1,15 +1,20 @@
-"""voz — scrape a SORTED XenForo sub-forum listing to rank by engagement.
+"""voz — rank a sub-forum by views/replies.
 
-voz RSS is chronological, so to rank by views we scrape the sorted thread
-listing per configured sub-forum:
-    https://voz.vn/f/<slug>.<id>/?order=view_count&direction=desc
-Parse thread rows for title, thread URL, view count, reply count, and
-last-activity time. Filter to threads active within window_hours, sort by
-rank_by (default views), cap. score stored as views; score_type 'replies_views'.
+voz fronts its SORTED HTML listing with a Cloudflare JS "managed challenge"
+that a plain HTTP client cannot solve (curl/requests get the "Just a moment"
+interstitial, never the threads). To get the ranked listing we drive a real
+headless browser (Playwright/Chromium), which executes the challenge JS, then
+parse the resulting HTML for view/reply counts. This is the only free way to
+get "Top by views/comments" for voz.
 
-NOTE: voz sits behind Cloudflare and may return 403 from datacenter/unknown
-IPs. We retry with a browser-like UA, and on persistent block we return [] so
-the run continues (the fetcher tolerates per-source failure).
+Fallback chain per forum:
+  1. browser-rendered sorted listing  -> ranked 'Top' (views or replies)
+  2. per-forum RSS (not challenged)    -> chronological 'Latest'
+  3. nothing                            -> skip (run continues)
+
+Enable the browser path with `use_browser: true` in sources.yaml (default for
+voz). Requires `playwright` + `python -m playwright install chromium`. If
+Playwright is unavailable or the challenge isn't solved, it degrades to RSS.
 """
 import re
 import feedparser
@@ -18,34 +23,44 @@ from bs4 import BeautifulSoup
 from ..http import get
 from ..util import parse_date, struct_time_to_utc
 
-BASE = "https://voz.vn/f/{forum}/?order={order}&direction=desc"
+# Default forum listing = most-recently-active threads first. We deliberately do
+# NOT use ?order=view_count: that returns all-time top threads, which are mostly
+# stale and get stripped by the recency window. Instead we take the recently
+# active threads and rank THOSE by views/replies client-side (rank.py) — i.e.
+# "most-viewed among threads active in the window", which is what 'Top' means here.
+LISTING_HTML = "https://voz.vn/f/{forum}/"
 RSS = "https://voz.vn/f/{forum}/index.rss"
+BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 
-def _int(text):
-    if text is None:
+def _count(text):
+    """Parse a XenForo engagement badge: '19K'->19000, '3M'->3000000,
+    '1.2K'->1200, '821'->821, else None. (The dd has no title attr.)"""
+    m = re.match(r"^\s*([\d.,]+)\s*([kmb])?\s*$", str(text or ""), re.IGNORECASE)
+    if not m:
         return None
-    digits = re.sub(r"[^\d]", "", str(text))
+    num_s, suf = m.group(1), (m.group(2) or "").lower()
+    if suf:  # abbreviated -> the number part may carry a decimal (',' or '.')
+        try:
+            num = float(num_s.replace(",", "."))
+        except ValueError:
+            return None
+        return int(num * {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}[suf])
+    digits = re.sub(r"[^\d]", "", num_s)   # plain integer, drop thousands seps
     return int(digits) if digits else None
 
 
-def _fetch_html(forum, order):
-    url = BASE.format(forum=forum, order=order)
-    # Try honest UA first, then browser UA if blocked.
-    resp = get(url, timeout=25)
-    if resp.status_code == 403:
-        resp = get(url, timeout=25, browser=True,
-                   headers={"Accept-Language": "vi,en;q=0.9",
-                            "Accept": "text/html,application/xhtml+xml"})
-    resp.raise_for_status()
-    return resp.text
-
-
-def _parse(html, forum):
+def _parse(html, forum, rank_by="views", skip_sticky=True):
     soup = BeautifulSoup(html, "lxml")
     items = []
-    # XenForo 2 thread rows.
     for row in soup.select("div.structItem--thread"):
+        # Pinned/sticky threads (rules, megathreads) have huge all-time view
+        # counts and would always top a view ranking — skip them so "Top by
+        # views" reflects actual news. Set skip_sticky: false to keep them.
+        if skip_sticky and row.select_one(".structItem-status--sticky"):
+            continue
+
         title_a = row.select_one(".structItem-title a[href*='/t/']") \
             or row.select_one(".structItem-title a")
         if not title_a:
@@ -56,50 +71,83 @@ def _parse(html, forum):
             continue
         url = href if href.startswith("http") else f"https://voz.vn{href}"
 
-        # Stats: views and replies live in .structItem-cell--meta dl/dd pairs.
         views = replies = None
-        for pair in row.select(".structItem-cell--meta .pairs, .structItem-cell--meta dl"):
-            label = pair.select_one("dt")
-            value = pair.select_one("dd")
-            if not label or not value:
+        for dl in row.select(".structItem-cell--meta dl"):
+            dt, dd = dl.select_one("dt"), dl.select_one("dd")
+            if not dt or not dd:
                 continue
-            ltext = label.get_text(strip=True).lower()
-            num = _int(value.get("title") or value.get_text(strip=True))
-            if "view" in ltext or "lượt xem" in ltext:
+            label = dt.get_text(strip=True).lower()
+            num = _count(dd.get("title") or dd.get_text(strip=True))
+            if "view" in label or "lượt xem" in label:
                 views = num
-            elif "repl" in ltext or "trả lời" in ltext:
+            elif "repl" in label or "trả lời" in label:
                 replies = num
 
-        # Last activity time (for the recency window).
-        time_el = row.select_one(".structItem-latestDate, time")
+        # last-activity time = the dedicated .structItem-latestDate (NOT the
+        # first <time>, which is the thread's start date).
+        time_el = row.select_one(".structItem-latestDate")
+        if not time_el:
+            times = row.select("time")
+            time_el = times[-1] if times else None
         published = None
         if time_el:
             published = parse_date(time_el.get("datetime") or time_el.get("title")
                                    or time_el.get_text(strip=True))
 
+        # Score on the configured engagement metric (so rank.py sorts by it).
+        if rank_by == "replies":
+            score, stype = replies, "replies"
+        else:
+            score, stype = views, "views"
         items.append({
             "url": url,
             "title": title,
             "source_detail": f"voz · {forum}",
             "published_at": published,
-            "score": views if views is not None else replies,
-            "score_type": "replies_views",
+            "score": score,
+            "score_type": stype,
             "metadata": {"views": views, "replies": replies},
         })
     return items
 
 
+def _fetch_html_browser(forum, attempts=2):
+    """Render the Cloudflare-challenged listing with headless Chromium."""
+    from playwright.sync_api import sync_playwright  # lazy: optional dependency
+
+    url = LISTING_HTML.format(forum=forum)
+    last_err = None
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            for attempt in range(1, attempts + 1):
+                ctx = browser.new_context(locale="vi-VN", user_agent=BROWSER_UA)
+                page = ctx.new_page()
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    # Cloudflare auto-solves the managed challenge, then the
+                    # thread rows appear. Wait for them.
+                    page.wait_for_selector("div.structItem--thread", timeout=30000)
+                    return page.content()
+                except Exception as exc:
+                    last_err = exc
+                    if attempt < attempts:
+                        page.wait_for_timeout(4000)  # let the challenge settle, retry
+                finally:
+                    ctx.close()
+        finally:
+            browser.close()
+    raise RuntimeError(f"challenge not solved after {attempts} tries: {last_err}")
+
+
 def _from_rss(forum):
-    """Fallback: the per-forum RSS is NOT behind Cloudflare's challenge, but it
-    is chronological (no view counts). Returns latest threads, score=None.
-    """
+    """Fallback: per-forum RSS is NOT challenged, but chronological (no counts)."""
     resp = get(RSS.format(forum=forum), timeout=25, browser=True)
     resp.raise_for_status()
     feed = feedparser.parse(resp.content)
     items = []
     for e in feed.entries:
-        link = e.get("link")
-        title = (e.get("title") or "").strip()
+        link, title = e.get("link"), (e.get("title") or "").strip()
         if not link or not title:
             continue
         items.append({
@@ -116,27 +164,33 @@ def _from_rss(forum):
 
 def fetch(cfg):
     rank_by = cfg.get("rank_by", "views")
-    order = "view_count" if rank_by == "views" else "reply_count"
-    all_items = []
-    html_items = 0
+    use_browser = cfg.get("use_browser", True)
+    all_items, ranked_items = [], 0
+
     for forum in cfg.get("forums", []):
         if "REPLACE_WITH" in forum:
             print(f"[voz] skipping placeholder forum {forum!r}; set a real slug.id")
             continue
-        # 1) Try the SORTED HTML listing (ranked by views). voz fronts this with
-        #    a Cloudflare JS challenge that a plain HTTP client can't solve, so
-        #    this usually fails — we then fall back to the per-forum RSS.
-        try:
-            parsed = _parse(_fetch_html(forum, order), forum)
-            if parsed:
-                print(f"[voz] {forum}: parsed {len(parsed)} threads (ranked HTML)")
-                all_items.extend(parsed)
-                html_items += len(parsed)
-                continue
-            print(f"[voz] {forum}: HTML listing empty; trying RSS")
-        except Exception as exc:
-            print(f"[voz] {forum}: HTML blocked ({exc}); falling back to RSS")
-        # 2) RSS fallback — chronological, so this source becomes 'Latest'.
+
+        # 1) ranked HTML via headless browser (Top by views/replies)
+        if use_browser:
+            try:
+                parsed = _parse(_fetch_html_browser(forum), forum,
+                                rank_by=rank_by,
+                                skip_sticky=cfg.get("skip_sticky", True))
+                if parsed:
+                    print(f"[voz] {forum}: {len(parsed)} threads ranked by {rank_by} (browser)")
+                    all_items.extend(parsed)
+                    ranked_items += len(parsed)
+                    continue
+                print(f"[voz] {forum}: browser listing empty; trying RSS")
+            except ImportError:
+                print("[voz] Playwright not installed; falling back to RSS. "
+                      "Enable ranked voz: pip install playwright && python -m playwright install chromium")
+            except Exception as exc:
+                print(f"[voz] {forum}: browser path failed ({exc}); falling back to RSS")
+
+        # 2) RSS fallback (chronological 'Latest')
         try:
             rss = _from_rss(forum)
             print(f"[voz] {forum}: {len(rss)} threads from RSS (chronological)")
@@ -144,9 +198,8 @@ def fetch(cfg):
         except Exception as exc:
             print(f"[voz] {forum}: RSS also failed: {exc}")
 
-    # If nothing came from the ranked HTML path, the data is chronological —
-    # relabel honestly as 'Latest' (mirrors the dailydev GraphQL->RSS fallback).
-    if all_items and html_items == 0:
+    # If we never got ranked data, the items are chronological -> relabel honestly.
+    if all_items and ranked_items == 0:
         cfg["rank"] = "latest"
         cfg["label"] = "Latest"
     return all_items

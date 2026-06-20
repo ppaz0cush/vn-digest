@@ -12,6 +12,10 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r fetcher/requirements.txt
+      # Chromium for the voz ranked-listing fetch (solves its Cloudflare JS
+      # challenge). If voz is blocked from the Actions IP, the fetcher falls
+      # back to voz RSS automatically — the run still succeeds.
+      - run: python -m playwright install --with-deps chromium
       - run: python -m fetcher.main
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
