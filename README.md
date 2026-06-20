@@ -63,8 +63,27 @@ set -a; . ./.env.local; set +a
 | spiderum | category page scrape | ✅ but the SSR only renders a few posts; low-volume by nature. |
 | voz | headless browser (ranked) → RSS fallback | ✅ **Top by views**. voz fronts its HTML behind a Cloudflare JS challenge that plain HTTP can't solve, so the fetcher drives a headless **Playwright/Chromium** (which runs the challenge JS), takes the recently-active threads and ranks them by views/replies, excluding pinned megathreads. If Playwright is missing or the challenge isn't solved (possible on some Actions IPs), it auto-falls back to voz RSS as chronological "Latest". Toggle with `use_browser` / `rank_by` in `sources.yaml`. |
 
-A typical run yields ~35–40 items. Each source is wrapped in try/except so one
+A typical run yields ~40–50 items. Each source is wrapped in try/except so one
 failure never aborts the run.
+
+## Trending ("Top by what's hot *today*")
+
+Engagement counts on these sites are **cumulative/lifetime** (voz "Views",
+article comment totals) — there's no per-day metric exposed. So ranking by the
+raw number favors old-but-bumped threads. To get a real "hottest in the last
+~24h" signal, the fetcher snapshots each item's score every run and ranks
+`trending: true` sources by the **gain since the previous run** (`score_delta`),
+not the lifetime total:
+
+- An established thread ranks on *today's* activity (views/comments gained).
+- A brand-new item (no prior snapshot) ranks by its current count — its
+  engagement is effectively all-recent — so it's never buried on day one.
+- The reader shows a `🔥 +1.2k hôm nay` badge next to the cumulative total.
+
+Enabled by default for **voz / tinhte / vnexpress**; toggle per source with
+`trending:` in `sources.yaml`. (dailydev stays off — its anonymous feed is
+frozen, so its delta is always 0.) The delta is computed against the *previous
+fetch*, which is ~24h on the daily cron.
 
 ## Deploy to the cloud (when happy locally)
 

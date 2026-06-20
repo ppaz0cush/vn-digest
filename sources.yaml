@@ -27,6 +27,11 @@ sources:
     # Enable ranked voz:  pip install playwright && python -m playwright install chromium
     use_browser: true       # set false to use RSS only (no browser dependency)
     skip_sticky: true       # ignore pinned megathreads (they'd top views forever)
+    # trending: rank by views GAINED since the previous run (~24h on the daily
+    # cron) instead of lifetime totals, so a long-running thread bumped today
+    # doesn't outrank genuinely hot ones. New threads rank by their current
+    # count (their views are all recent). Set false to rank by lifetime totals.
+    trending: true
     forums:
       - "diem-bao.33"
     rank: top
@@ -54,6 +59,7 @@ sources:
     url: "https://tinhte.vn/rss"
     rank: top
     rank_by: comments       # comment count is in the RSS via <slash:comments>
+    trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
     window_hours: 48
     max_items: 10
@@ -64,6 +70,7 @@ sources:
     url: "https://vnexpress.net/rss/so-hoa.rss"
     rank: top
     rank_by: comments       # via the comment-count API (RSS has no counts)
+    trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
     window_hours: 48
     max_items: 10

@@ -146,6 +146,11 @@ html, body {
   border-radius: 999px; padding: .05rem .4rem;
 }
 .card .score { font-variant-numeric: tabular-nums; }
+.card .trending {
+  font-size: .78rem; font-weight: 700;
+  color: #b45309; background: #fff7ed; border: 1px solid #fed7aa;
+  border-radius: 999px; padding: .04rem .45rem; font-variant-numeric: tabular-nums;
+}
 
 .actions { display: flex; gap: .4rem; margin-top: .2rem; }
 .actions button {

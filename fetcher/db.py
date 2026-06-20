@@ -20,6 +20,28 @@ def _config():
     return url.rstrip("/"), key
 
 
+def fetch_prev_scores():
+    """Return {url: {"score": int|None, "last_score_at": str|None}} for every
+    item that currently has a score. Used to compute the per-run delta. Returns
+    {} (and logs) if the DB is unreachable, so a fetch can still proceed."""
+    try:
+        url, key = _config()
+    except SystemExit:
+        return {}
+    endpoint = f"{url}/rest/v1/items"
+    headers = {"apikey": key, "Authorization": f"Bearer {key}", "User-Agent": USER_AGENT}
+    params = {"select": "url,score,last_score_at", "score": "not.is.null", "limit": "50000"}
+    try:
+        resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
+        resp.raise_for_status()
+        return {row["url"]: {"score": row.get("score"),
+                             "last_score_at": row.get("last_score_at")}
+                for row in resp.json()}
+    except Exception as exc:
+        print(f"[db] could not read previous scores ({exc}); deltas start fresh")
+        return {}
+
+
 def upsert_items(items):
     """Upsert a list of normalized item dicts into the `items` table.
 

@@ -130,13 +130,21 @@
     return d < 30 ? d + "d" : Math.floor(d / 30) + "mo";
   }
 
+  function compact(n) {
+    return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+  }
+
   function scoreBadge(item) {
     if (item.score == null) return "";
-    const n = item.score;
-    const compact = n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
     const icon = { comments: "💬", upvotes: "▲", upvote: "▲", views: "👁",
-                   replies_views: "👁", points: "✦" }[item.score_type] || "•";
-    return `<span class="score">${icon} ${compact}</span>`;
+                   replies_views: "👁", views_: "👁", replies: "💬", points: "✦" }[item.score_type] || "•";
+    // Cumulative total (muted), plus a "trending" badge showing the gain since
+    // the last fetch when we have it.
+    let out = `<span class="score">${icon} ${compact(item.score)}</span>`;
+    if (item.score_delta != null && item.score_delta > 0) {
+      out += ` <span class="trending">🔥 +${compact(item.score_delta)} hôm nay</span>`;
+    }
+    return out;
   }
 
   function render() {

@@ -41,12 +41,21 @@ def _published_key(item):
 def rank_items(items, *, rank, tiebreak=None):
     """Sort items per the source config.
 
-    rank == 'latest'  -> newest first by published_at
-    rank == 'top'      -> highest score first; tiebreak 'published_desc' breaks
-                          ties by newest. Items without a score sort last.
+    rank == 'latest'   -> newest first by published_at
+    rank == 'top'       -> highest score first; tiebreak 'published_desc' breaks
+                           ties by newest. Items without a score sort last.
+    rank == 'trending'  -> highest `_trend` first (engagement gained since the
+                           last run; see main.py), tiebreak by newest.
     """
     if rank == "latest":
         return sorted(items, key=_published_key, reverse=True)
+
+    if rank == "trending":
+        return sorted(
+            items,
+            key=lambda it: (it.get("_trend") or 0, _published_key(it)),
+            reverse=True,
+        )
 
     # rank == 'top'
     def top_key(it):

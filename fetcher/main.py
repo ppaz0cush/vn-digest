@@ -15,11 +15,12 @@ import sys
 import argparse
 import traceback
 from pathlib import Path
+from datetime import datetime, timezone
 
 import yaml
 
 from . import rank as rankmod
-from .db import upsert_items
+from .db import upsert_items, fetch_prev_scores
 from .sources import (
     rss_latest, rss_comments, vnexpress, dailydev, voz, spiderum,
 )
@@ -58,10 +59,42 @@ def normalize(item, cfg):
         "rank_label": cfg.get("label", "Latest"),
         "rank_position": item.get("rank_position"),
         "metadata": item.get("metadata"),
+        "prev_score": item.get("prev_score"),
+        "score_delta": item.get("score_delta"),
+        "last_score_at": item.get("last_score_at"),
+        "prev_score_at": item.get("prev_score_at"),
     }
 
 
-def run_source(cfg):
+def apply_deltas(raw, prev_scores, run_ts):
+    """Annotate each item with its score delta vs. the previous run and a
+    `_trend` value used for trending ranking.
+
+    score_delta = score - prev_score   (true gain since last run; may be null)
+    _trend      = the value we rank 'trending' sources by:
+        - if we have a previous score: the gain since then (>=0), so an old
+          thread bumped today ranks on TODAY's activity, not its lifetime total;
+        - if this is the first time we see the item: its current score (a new
+          thread's count is effectively all-recent), so new hot items aren't
+          buried on day one.
+    """
+    for it in raw:
+        score = it.get("score")
+        prev = prev_scores.get(it.get("url"))
+        prev_score = prev["score"] if prev else None
+        if score is not None:
+            it["last_score_at"] = run_ts
+        if score is not None and prev_score is not None:
+            it["prev_score"] = prev_score
+            it["prev_score_at"] = prev["last_score_at"]
+            it["score_delta"] = score - prev_score
+            it["_trend"] = max(score - prev_score, 0)
+        else:
+            it["_trend"] = score if score is not None else None
+    return raw
+
+
+def run_source(cfg, prev_scores, run_ts):
     strategy = cfg.get("strategy")
     fn = STRATEGIES.get(strategy)
     if fn is None:
@@ -69,9 +102,16 @@ def run_source(cfg):
         return []
 
     raw = fn(cfg)  # source modules may mutate cfg (e.g. dailydev fallback)
+    raw = apply_deltas(raw, prev_scores, run_ts)
+
+    # 'trending' sources rank by gain-since-last-run; others keep their config.
+    rank = cfg.get("rank", "latest")
+    if cfg.get("trending") and rank == "top":
+        rank = "trending"
+
     processed = rankmod.process(
         raw,
-        rank=cfg.get("rank", "latest"),
+        rank=rank,
         window_hours=cfg.get("window_hours", 168),
         max_items=cfg.get("max_items", 10),
         tiebreak=cfg.get("tiebreak"),
@@ -96,6 +136,10 @@ def main():
     config = load_config()
     only = set(s.strip() for s in args.only.split(",")) if args.only else None
 
+    run_ts = datetime.now(timezone.utc).isoformat()
+    prev_scores = fetch_prev_scores()  # {url: {score, last_score_at}}; {} if no DB
+    print(f"loaded {len(prev_scores)} previous scores for delta ranking")
+
     all_items = []
     for cfg in config.get("sources", []):
         name = cfg.get("name")
@@ -103,10 +147,15 @@ def main():
             continue
         print(f"\n=== {name} ({cfg.get('strategy')}) ===")
         try:
-            items = run_source(cfg)
+            items = run_source(cfg, prev_scores, run_ts)
             print(f"[{name}] -> {len(items)} items")
             for it in items:
-                badge = f" [{it['score']} {it['score_type']}]" if it.get("score") is not None else ""
+                if it.get("score_delta") is not None:
+                    badge = f" [+{it['score_delta']} {it['score_type']} today | {it['score']} total]"
+                elif it.get("score") is not None:
+                    badge = f" [{it['score']} {it['score_type']}]"
+                else:
+                    badge = ""
                 print(f"    {it['rank_position']:>2}. {it['title'][:80]}{badge}")
             all_items.extend(items)
         except Exception:
