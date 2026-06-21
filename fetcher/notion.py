@@ -20,6 +20,7 @@ Status, so your triage (Read/Saved/Skipped) is preserved across runs.
 """
 import os
 import time
+from datetime import datetime
 import requests
 
 API = "https://api.notion.com/v1"
@@ -109,6 +110,13 @@ def _text(s, limit=2000):
     return [{"text": {"content": (s or "")[:limit]}}] if s else []
 
 
+def _iso(v):
+    """Notion date 'start' must be an ISO string — coerce datetimes."""
+    if isinstance(v, datetime):
+        return v.isoformat()
+    return v  # already a string or None
+
+
 def _properties(item, *, creating):
     """Build the Notion properties payload for an item. On update we omit Status
     so the user's triage is never overwritten."""
@@ -121,8 +129,8 @@ def _properties(item, *, creating):
         "Δ today": {"number": item.get("score_delta")},
         "Prev score": {"number": item.get("prev_score")},
         "Rank": {"number": item.get("rank_position")},
-        "Published": {"date": {"start": item["published_at"]} if item.get("published_at") else None},
-        "Fetched": {"date": {"start": item["last_score_at"]} if item.get("last_score_at") else None},
+        "Published": {"date": {"start": _iso(item["published_at"])} if item.get("published_at") else None},
+        "Fetched": {"date": {"start": _iso(item["last_score_at"])} if item.get("last_score_at") else None},
         "Detail": {"rich_text": _text(item.get("source_detail"), 300)},
     }
     if creating:
