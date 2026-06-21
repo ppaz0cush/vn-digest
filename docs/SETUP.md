@@ -51,8 +51,13 @@ Open the database in Notion — you should see the rows.
 2. Add the two secrets:
    ```bash
    gh secret set NOTION_TOKEN  --body "ntn_xxx"
-   gh secret set NOTION_DB_ID  --body "<your db id>"
+   gh secret set NOTION_DB_ID  --body "<your DATABASE id>"
    ```
+   ⚠️ Use the **database** id (printed by `notion_init.py`, step 2.4), NOT the
+   parent *page* id. They look identical but are different:
+   - page  `.../Articles-Digest-38600d1ef78980edb9f3f8d68176f273` ← this is the PAGE (for NOTION_PARENT_PAGE_ID)
+   - database id = `38600d1e-f789-81ac-bf37-cb906f40a71a` ← this is what NOTION_DB_ID needs
+   If you pass the page id, every write fails with *"… is a page, not a database."*
 3. That's it. `.github/workflows/fetch.yml` runs daily at 00:00 UTC (07:00 ICT)
    and installs Chromium itself. Trigger a first run now:
    ```bash
