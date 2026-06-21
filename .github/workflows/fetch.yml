@@ -21,3 +21,5 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           # (Cleanup is manual — see the prune-notion workflow, not auto here.)
+
+# (registered via push)
