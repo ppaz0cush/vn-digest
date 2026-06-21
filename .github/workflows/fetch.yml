@@ -25,3 +25,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          # Optional: auto-archive rows older than N days (keeps Saved ones), so
+          # the Notion DB stays small. Set the NOTION_PRUNE_DAYS repo variable.
+          NOTION_PRUNE_DAYS: ${{ vars.NOTION_PRUNE_DAYS }}

@@ -20,7 +20,7 @@ Status, so your triage (Read/Saved/Skipped) is preserved across runs.
 """
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import requests
 
 API = "https://api.notion.com/v1"
@@ -185,3 +185,43 @@ def upsert_items(items):
         _throttle()
 
     print(f"[notion] created {created}, updated {updated}, failed {failed}")
+
+    days = os.environ.get("NOTION_PRUNE_DAYS")
+    if days:
+        try:
+            prune(int(days))
+        except Exception as exc:
+            print(f"[notion] prune skipped ({exc})")
+
+
+def prune(days):
+    """Archive rows whose Fetched date is older than `days`, EXCEPT ones you
+    Saved (Status='Saved'). Archived pages go to Notion's trash (auto-deleted
+    after 30 days), so the database stays small and snappy — no manual cleanup,
+    and the database id / views / saved items are preserved."""
+    db_id = _config()[1]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    payload = {
+        "page_size": 100,
+        "filter": {"and": [
+            {"property": "Fetched", "date": {"before": cutoff}},
+            {"property": "Status", "select": {"does_not_equal": "Saved"}},
+        ]},
+    }
+    archived = 0
+    while True:
+        r = requests.post(f"{API}/databases/{db_id}/query", headers=_headers(),
+                          json=payload, timeout=30)
+        if r.status_code >= 300:
+            raise RuntimeError(f"prune query {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        for page in data.get("results", []):
+            pr = requests.patch(f"{API}/pages/{page['id']}", headers=_headers(),
+                               json={"archived": True}, timeout=30)
+            if pr.status_code < 300:
+                archived += 1
+            _throttle()
+        if not data.get("has_more"):
+            break
+        payload["start_cursor"] = data["next_cursor"]
+    print(f"[notion] pruned {archived} rows older than {days}d (kept Saved)")

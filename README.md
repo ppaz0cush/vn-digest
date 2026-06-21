@@ -117,6 +117,13 @@ triage is preserved. **One-time Notion setup:**
 4. Set `NOTION_TOKEN` + `NOTION_DB_ID` (env locally; GitHub secrets for CI) and
    set the `FETCH_TARGET` repo variable to `notion` or `both`.
 
+**Keeping the Notion DB lean:** set `NOTION_PRUNE_DAYS` (env locally, or a repo
+variable for CI) and each run auto-archives rows older than that many days —
+**except ones you Saved** — so the database never bloats. Archived rows go to
+Notion's trash. Don't delete the whole *database* to clean up: that changes the
+`NOTION_DB_ID` and wipes your views/saved items. Clear rows (or let pruning do
+it) instead.
+
 `db.py` (Supabase) and `notion.py` share one fetcher, so scraper fixes apply to
 both. The Supabase version is tagged `supabase-v1` as a restore point.
 
