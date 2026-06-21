@@ -28,10 +28,29 @@ from ..util import parse_date, struct_time_to_utc
 # stale and get stripped by the recency window. Instead we take the recently
 # active threads and rank THOSE by views/replies client-side (rank.py) — i.e.
 # "most-viewed among threads active in the window", which is what 'Top' means here.
-LISTING_HTML = "https://voz.vn/f/{forum}/"
-RSS = "https://voz.vn/f/{forum}/index.rss"
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+
+
+def _split_forum(forum):
+    """A forum entry is '<slug>.<id>' (a normal /f/ forum) or '<type>/<slug>.<id>'
+    for other node types, e.g. 's/review-san-pham.103' (voz's /s/ nodes)."""
+    f = forum.strip().strip("/")
+    if "/" in f:
+        node_type, slug = f.split("/", 1)
+    else:
+        node_type, slug = "f", f
+    return node_type, slug
+
+
+def _listing_url(forum):
+    t, s = _split_forum(forum)
+    return f"https://voz.vn/{t}/{s}/"
+
+
+def _rss_url(forum):
+    t, s = _split_forum(forum)
+    return f"https://voz.vn/{t}/{s}/index.rss"
 
 
 def _count(text):
@@ -115,7 +134,7 @@ def _fetch_html_browser(forum, attempts=2):
     """Render the Cloudflare-challenged listing with headless Chromium."""
     from playwright.sync_api import sync_playwright  # lazy: optional dependency
 
-    url = LISTING_HTML.format(forum=forum)
+    url = _listing_url(forum)
     last_err = None
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -142,7 +161,7 @@ def _fetch_html_browser(forum, attempts=2):
 
 def _from_rss(forum):
     """Fallback: per-forum RSS is NOT challenged, but chronological (no counts)."""
-    resp = get(RSS.format(forum=forum), timeout=25, browser=True)
+    resp = get(_rss_url(forum), timeout=25, browser=True)
     resp.raise_for_status()
     feed = feedparser.parse(resp.content)
     items = []
@@ -165,6 +184,9 @@ def _from_rss(forum):
 def fetch(cfg):
     rank_by = cfg.get("rank_by", "views")
     use_browser = cfg.get("use_browser", True)
+    # Top-N threads kept PER forum, so a high-traffic forum (e.g. Chuyện trò
+    # linh tinh) can't crowd the others out of the combined voz ranking.
+    per_forum = cfg.get("per_forum_items")
     all_items, ranked_items = [], 0
 
     for forum in cfg.get("forums", []):
@@ -179,6 +201,9 @@ def fetch(cfg):
                                 rank_by=rank_by,
                                 skip_sticky=cfg.get("skip_sticky", True))
                 if parsed:
+                    if per_forum:
+                        parsed = sorted(parsed, key=lambda x: x.get("score") or -1,
+                                        reverse=True)[:per_forum]
                     print(f"[voz] {forum}: {len(parsed)} threads ranked by {rank_by} (browser)")
                     all_items.extend(parsed)
                     ranked_items += len(parsed)
@@ -193,6 +218,8 @@ def fetch(cfg):
         # 2) RSS fallback (chronological 'Latest')
         try:
             rss = _from_rss(forum)
+            if per_forum:
+                rss = rss[:per_forum]
             print(f"[voz] {forum}: {len(rss)} threads from RSS (chronological)")
             all_items.extend(rss)
         except Exception as exc:

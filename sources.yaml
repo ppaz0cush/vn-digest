@@ -35,12 +35,22 @@ sources:
     forums:
       - "diem-bao.33"
     trending: true
+    # Forums to pull from. Format: '<slug>.<id>' for normal /f/ forums, or
+    # '<type>/<slug>.<id>' for other node types (voz's /s/ nodes). Find a
+    # slug.id by opening the forum on voz.vn and copying it from the URL.
     forums:
-      - "diem-bao.33"
+      - "diem-bao.33"               # Điểm báo (news)
+      - "phan-mem.13"               # Phần mềm
+      - "app-di-dong.21"            # App di động
+      - "chuyen-tro-linh-tinh.17"   # Chuyện trò linh tinh™ (very high traffic)
+      - "from-f17-with-love.69"     # from f17 with love
+      - "s/review-san-pham.103"     # Review sản phẩm  (/s/ node)
+      - "s/chia-se-kien-thuc.104"   # Chia sẻ kiến thức (/s/ node)
     rank: top
     rank_by: views          # 'views' is harder to game than 'replies' (bumping)
+    per_forum_items: 4      # keep top-4 PER forum so no single forum dominates
     window_hours: 24        # rank among threads ACTIVE in the last 24h
-    max_items: 5
+    max_items: 28           # overall voz cap (7 forums × 4)
     label: "Top"
 
   # (dailydev removed — its unauthenticated feed was a frozen all-time-popular
