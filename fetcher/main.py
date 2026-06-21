@@ -1,7 +1,8 @@
 """Fetcher entrypoint.
 
-Reads sources.yaml, dispatches each source to its strategy module, normalizes
-to the `items` schema, ranks/filters/caps, and UPSERTs into Supabase.
+Reads sources.yaml, dispatches each source (by name) to its module under
+fetcher/sources/, normalizes to the item schema, ranks/filters/caps, and
+upserts into the configured sink(s) (Supabase and/or Notion).
 
 Run locally:
     SUPABASE_URL=http://localhost:54321 \
@@ -17,15 +18,23 @@ import traceback
 from pathlib import Path
 from datetime import datetime, timezone
 
-import os
 import yaml
 
 from . import rank as rankmod
 from . import db as supabase_sink
 from . import notion as notion_sink
-from .sources import (
-    rss_latest, rss_comments, vnexpress, voz, spiderum,
-)
+from .sources import voz, tinhte, vnexpress, anonyviet, spiderum, engineerpro
+
+# Dispatch by SOURCE NAME (matches `name:` in sources.yaml). One module per
+# source under fetcher/sources/ — add a source by adding its module + a line here.
+SOURCES = {
+    "voz": voz.fetch,
+    "tinhte": tinhte.fetch,
+    "vnexpress": vnexpress.fetch,
+    "anonyviet": anonyviet.fetch,
+    "spiderum": spiderum.fetch,
+    "engineerpro": engineerpro.fetch,
+}
 
 
 def get_sinks():
@@ -39,19 +48,6 @@ def get_sinks():
     if target == "both":
         return [notion_sink, supabase_sink]
     return [supabase_sink]
-
-STRATEGIES = {
-    "rss_latest": rss_latest.fetch,
-    "rss_comments": rss_comments.fetch,
-    "vnexpress": vnexpress.fetch,
-    "voz_html": voz.fetch,
-    "spiderum": spiderum.fetch,
-}
-
-ITEM_COLUMNS = (
-    "url", "source", "title", "source_detail", "published_at",
-    "score", "score_type", "rank_label", "rank_position", "metadata",
-)
 
 
 def load_config():
@@ -109,13 +105,13 @@ def apply_deltas(raw, prev_scores, run_ts):
 
 
 def run_source(cfg, prev_scores, run_ts):
-    strategy = cfg.get("strategy")
-    fn = STRATEGIES.get(strategy)
+    name = cfg.get("name")
+    fn = SOURCES.get(name)
     if fn is None:
-        print(f"[skip] {cfg.get('name')}: unknown strategy {strategy!r}")
+        print(f"[skip] {name!r}: no fetcher registered (see SOURCES in main.py)")
         return []
 
-    raw = fn(cfg)  # source modules may mutate cfg (e.g. dailydev fallback)
+    raw = fn(cfg)  # source modules may mutate cfg (e.g. voz RSS-fallback relabel)
     raw = apply_deltas(raw, prev_scores, run_ts)
 
     # 'trending' sources rank by gain-since-last-run; others keep their config.
@@ -163,7 +159,7 @@ def main():
         name = cfg.get("name")
         if only and name not in only:
             continue
-        print(f"\n=== {name} ({cfg.get('strategy')}) ===")
+        print(f"\n=== {name} ===")
         try:
             items = run_source(cfg, prev_scores, run_ts)
             print(f"[{name}] -> {len(items)} items")

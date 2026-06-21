@@ -13,7 +13,6 @@
 
 sources:
   - name: voz
-    strategy: voz_html
     # Set the sub-forum(s) you want. Find the slug.id by opening the sub-forum on
     # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
     # Default below targets the "Điểm báo" (press/news) section. The generic
@@ -31,9 +30,6 @@ sources:
     # cron) instead of lifetime totals, so a long-running thread bumped today
     # doesn't outrank genuinely hot ones. New threads rank by their current
     # count (their views are all recent). Set false to rank by lifetime totals.
-    trending: true
-    forums:
-      - "diem-bao.33"
     trending: true
     # Forums to pull from. Format: '<slug>.<id>' for normal /f/ forums, or
     # '<type>/<slug>.<id>' for other node types (voz's /s/ nodes). Find a
@@ -57,7 +53,6 @@ sources:
   # snapshot with stale dates, not a live daily feed.)
 
   - name: tinhte
-    strategy: rss_comments
     url: "https://tinhte.vn/rss"
     rank: top
     rank_by: comments       # comment count is in the RSS via <slash:comments>
@@ -68,7 +63,6 @@ sources:
     label: "Top"
 
   - name: vnexpress
-    strategy: vnexpress
     url: "https://vnexpress.net/rss/so-hoa.rss"
     rank: top
     rank_by: comments       # via the comment-count API (RSS has no counts)
@@ -79,7 +73,6 @@ sources:
     label: "Top"
 
   - name: anonyviet
-    strategy: rss_latest
     url: "https://anonyviet.com/feed/"
     rank: latest
     window_hours: 168       # 7 days (low volume)
@@ -87,7 +80,6 @@ sources:
     label: "Latest"
 
   - name: spiderum
-    strategy: spiderum
     # CONFIRMED scope: the "Quan điểm - Tranh luận" category only.
     category_url: "https://spiderum.com/danh-muc/quan-diem-tranh-luan?sort=new&page_idx=1"
     post_url_pattern: "https://spiderum.com/bai-dang/{slug}"
@@ -99,7 +91,6 @@ sources:
     label: "Latest"
 
   - name: engineerpro
-    strategy: rss_latest
     url: "https://engineerprovn.substack.com/feed"
     rank: latest
     window_hours: 336       # 14 days — they post only ~2-3x/week
