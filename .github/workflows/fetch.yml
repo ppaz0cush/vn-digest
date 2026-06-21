@@ -18,11 +18,6 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python -m fetcher.main
         env:
-          # Write target: set the FETCH_TARGET repo variable to notion|both;
-          # defaults to supabase.
-          TARGET: ${{ vars.FETCH_TARGET || 'supabase' }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           # (Cleanup is manual — see the prune-notion workflow, not auto here.)

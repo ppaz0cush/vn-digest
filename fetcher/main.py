@@ -11,8 +11,6 @@ Run locally:
 
 Add --dry-run to print results without writing to the DB.
 """
-import os
-import sys
 import argparse
 import traceback
 from pathlib import Path
@@ -21,7 +19,6 @@ from datetime import datetime, timezone
 import yaml
 
 from . import rank as rankmod
-from . import db as supabase_sink
 from . import notion as notion_sink
 from .sources import voz, tinhte, vnexpress, anonyviet, spiderum, engineerpro
 
@@ -35,19 +32,6 @@ SOURCES = {
     "spiderum": spiderum.fetch,
     "engineerpro": engineerpro.fetch,
 }
-
-
-def get_sinks():
-    """Pick write targets from the TARGET env var: 'supabase' (default),
-    'notion', or 'both'. For 'both', Notion is primary (drives the deltas) so
-    switching to 'notion' later keeps the trend history continuous. Returns a
-    list of modules each exposing fetch_prev_scores() + upsert_items()."""
-    target = os.environ.get("TARGET", "supabase").lower()
-    if target == "notion":
-        return [notion_sink]
-    if target == "both":
-        return [notion_sink, supabase_sink]
-    return [supabase_sink]
 
 
 def load_config():
@@ -146,12 +130,9 @@ def main():
     config = load_config()
     only = set(s.strip() for s in args.only.split(",")) if args.only else None
 
-    sinks = get_sinks()
-    print(f"write target(s): {', '.join(s.__name__.split('.')[-1] for s in sinks)}")
-
     run_ts = datetime.now(timezone.utc).isoformat()
-    # Deltas come from the primary sink's previous snapshot.
-    prev_scores = sinks[0].fetch_prev_scores()  # {url: {score, last_score_at}}; {} if unreachable
+    # Deltas come from the previous Notion snapshot ({} if creds unset / dry-run).
+    prev_scores = notion_sink.fetch_prev_scores()  # {url: {score, last_score_at}}
     print(f"loaded {len(prev_scores)} previous scores for delta ranking")
 
     all_items = []
@@ -182,8 +163,7 @@ def main():
         print("(dry-run: not writing)")
         return
 
-    for sink in sinks:
-        sink.upsert_items(all_items)
+    notion_sink.upsert_items(all_items)
 
 
 if __name__ == "__main__":

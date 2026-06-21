@@ -97,6 +97,9 @@ def _load_index():
 
 
 def fetch_prev_scores():
+    # No creds (e.g. a --dry-run without a token) -> no deltas, but fetch runs.
+    if not (os.environ.get("NOTION_TOKEN") and os.environ.get("NOTION_DB_ID")):
+        return {}
     try:
         idx = _load_index()
     except Exception as exc:
