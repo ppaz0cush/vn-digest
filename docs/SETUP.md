@@ -76,4 +76,6 @@ column reference in [SOURCES.md](SOURCES.md#notion-columns).
   notion.so/my-integrations and update `NOTION_TOKEN` (env + GitHub secret).
 - **Keeping the DB lean:** pruning is manual — see [RUNNING.md](RUNNING.md#prune-the-button).
 - **Don't delete the whole database** to clean up — it changes `NOTION_DB_ID`
-  and wipes your views/Saved items. Prune (or clear rows) instead.
+  and wipes your saved views. Use the prune button (or clear rows) instead.
+- **Prune deletes everything older than N days** (Saved included) — save
+  anything you want to keep outside this database.

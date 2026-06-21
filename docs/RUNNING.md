@@ -28,9 +28,9 @@ one failing source (e.g. voz blocked) logs and the rest still run.
 
 ## Prune (the button)
 
-Cleanup is **manual** — it never runs during a fetch. It archives rows older
-than N days, **keeping anything you marked Saved**. Archived rows go to Notion's
-trash.
+Cleanup is **manual** — it never runs during a fetch. It archives **all** rows
+older than N days (no exceptions — Saved rows are deleted too, so save anything
+you want to keep elsewhere). Archived rows go to Notion's trash.
 
 **Locally:**
 ```bash

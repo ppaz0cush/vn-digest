@@ -191,19 +191,16 @@ def upsert_items(items):
 
 
 def prune(days):
-    """Archive rows whose Fetched date is older than `days`, EXCEPT ones you
-    Saved (Status='Saved'). Archived pages go to Notion's trash (auto-deleted
-    after 30 days). Run on demand (see fetcher/prune.py) — NOT during a normal
-    fetch — so cleanup is something you trigger yourself. The database id /
-    views / saved items are all preserved."""
+    """Archive ALL rows whose Fetched date is older than `days` (no exceptions —
+    Saved rows are deleted too; save anything you want to keep elsewhere).
+    Archived pages go to Notion's trash (auto-deleted after 30 days). Run on
+    demand (see fetcher/prune.py), NOT during a normal fetch. The database
+    itself / its views are preserved."""
     db_id = _config()[1]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     payload = {
         "page_size": 100,
-        "filter": {"and": [
-            {"property": "Fetched", "date": {"before": cutoff}},
-            {"property": "Status", "select": {"does_not_equal": "Saved"}},
-        ]},
+        "filter": {"property": "Fetched", "date": {"before": cutoff}},
     }
     archived = 0
     while True:
@@ -221,4 +218,4 @@ def prune(days):
         if not data.get("has_more"):
             break
         payload["start_cursor"] = data["next_cursor"]
-    print(f"[notion] pruned {archived} rows older than {days}d (kept Saved)")
+    print(f"[notion] pruned {archived} rows older than {days}d")

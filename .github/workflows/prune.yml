@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       days:
-        description: "Archive Notion rows older than this many days (keeps Saved)"
+        description: "Archive ALL Notion rows older than this many days (no exceptions)"
         required: true
         default: "30"
 jobs:
