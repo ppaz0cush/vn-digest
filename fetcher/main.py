@@ -96,8 +96,7 @@ def apply_deltas(raw, prev_scores, run_ts):
         score = it.get("score")
         prev = prev_scores.get(it.get("url"))
         prev_score = prev["score"] if prev else None
-        if score is not None:
-            it["last_score_at"] = run_ts
+        it["last_score_at"] = run_ts   # "Fetched" time — set for EVERY item
         if score is not None and prev_score is not None:
             it["prev_score"] = prev_score
             it["prev_score_at"] = prev["last_score_at"]

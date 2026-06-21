@@ -106,8 +106,12 @@ def fetch_prev_scores():
             for url, v in idx.items()}
 
 
-def _text(s, limit=2000):
-    return [{"text": {"content": (s or "")[:limit]}}] if s else []
+def _title(title, url):
+    """Title as a clickable link to the article (so clicking it opens the URL)."""
+    t = {"type": "text", "text": {"content": (title or "(untitled)")[:2000]}}
+    if url:
+        t["text"]["link"] = {"url": url}
+    return [t]
 
 
 def _iso(v):
@@ -121,7 +125,7 @@ def _properties(item, *, creating):
     """Build the Notion properties payload for an item. On update we omit Status
     so the user's triage is never overwritten."""
     props = {
-        "Title": {"title": _text(item.get("title"), 2000)},
+        "Title": {"title": _title(item.get("title"), item.get("url"))},
         "URL": {"url": item.get("url")},
         "Source": {"select": {"name": item["source"]}} if item.get("source") else {"select": None},
         "Label": {"select": {"name": item["rank_label"]}} if item.get("rank_label") else {"select": None},
@@ -131,7 +135,6 @@ def _properties(item, *, creating):
         "Rank": {"number": item.get("rank_position")},
         "Published": {"date": {"start": _iso(item["published_at"])} if item.get("published_at") else None},
         "Fetched": {"date": {"start": _iso(item["last_score_at"])} if item.get("last_score_at") else None},
-        "Detail": {"rich_text": _text(item.get("source_detail"), 300)},
     }
     if creating:
         props["Status"] = {"select": {"name": "New"}}

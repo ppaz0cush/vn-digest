@@ -45,7 +45,6 @@ schema = {
         "Rank": {"number": {}},
         "Published": {"date": {}},
         "Fetched": {"date": {}},
-        "Detail": {"rich_text": {}},
     },
 }
 
