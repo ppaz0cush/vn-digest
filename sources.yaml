@@ -34,25 +34,17 @@ sources:
     trending: true
     forums:
       - "diem-bao.33"
+    trending: true
+    forums:
+      - "diem-bao.33"
     rank: top
     rank_by: views          # 'views' is harder to game than 'replies' (bumping)
-    window_hours: 48        # rank among threads ACTIVE in the last 48h
-    max_items: 10
-    label: "Top"
-
-  - name: dailydev
-    strategy: dailydev_graphql
-    rank: top
-    rank_by: upvotes
-    # NOTE: daily.dev's UNAUTHENTICATED anonymousFeed returns a frozen/cached
-    # "all-time popular" set with stale createdAt values (not a live daily feed).
-    # A recency window would therefore empty it, so we disable the window and
-    # simply take the top-N by upvotes. The dates shown will be old — this is the
-    # honest behavior of the free anonymous endpoint. Drop this source if you
-    # don't want a static top-5.
-    window_hours: null      # no recency filter (see note above)
+    window_hours: 24        # rank among threads ACTIVE in the last 24h
     max_items: 5
     label: "Top"
+
+  # (dailydev removed — its unauthenticated feed was a frozen all-time-popular
+  # snapshot with stale dates, not a live daily feed.)
 
   - name: tinhte
     strategy: rss_comments
@@ -61,8 +53,8 @@ sources:
     rank_by: comments       # comment count is in the RSS via <slash:comments>
     trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
-    window_hours: 48
-    max_items: 10
+    window_hours: 24
+    max_items: 5
     label: "Top"
 
   - name: vnexpress
@@ -72,8 +64,8 @@ sources:
     rank_by: comments       # via the comment-count API (RSS has no counts)
     trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
-    window_hours: 48
-    max_items: 10
+    window_hours: 24
+    max_items: 5
     label: "Top"
 
   - name: anonyviet
@@ -81,7 +73,7 @@ sources:
     url: "https://anonyviet.com/feed/"
     rank: latest
     window_hours: 168       # 7 days (low volume)
-    max_items: 10
+    max_items: 20
     label: "Latest"
 
   - name: spiderum
@@ -90,8 +82,10 @@ sources:
     category_url: "https://spiderum.com/danh-muc/quan-diem-tranh-luan?sort=new&page_idx=1"
     post_url_pattern: "https://spiderum.com/bai-dang/{slug}"
     rank: latest
-    window_hours: 168
-    max_items: 10
+    # NOTE: spiderum's listing exposes no post timestamps, so window_hours has no
+    # effect here (dateless items are always kept) — max_items + page order rule.
+    window_hours: 24
+    max_items: 5
     label: "Latest"
 
   - name: engineerpro
@@ -99,5 +93,5 @@ sources:
     url: "https://engineerprovn.substack.com/feed"
     rank: latest
     window_hours: 336       # 14 days — they post only ~2-3x/week
-    max_items: 10
+    max_items: 20
     label: "Latest"

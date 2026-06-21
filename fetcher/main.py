@@ -22,14 +22,13 @@ import yaml
 from . import rank as rankmod
 from .db import upsert_items, fetch_prev_scores
 from .sources import (
-    rss_latest, rss_comments, vnexpress, dailydev, voz, spiderum,
+    rss_latest, rss_comments, vnexpress, voz, spiderum,
 )
 
 STRATEGIES = {
     "rss_latest": rss_latest.fetch,
     "rss_comments": rss_comments.fetch,
     "vnexpress": vnexpress.fetch,
-    "dailydev_graphql": dailydev.fetch,
     "voz_html": voz.fetch,
     "spiderum": spiderum.fetch,
 }
