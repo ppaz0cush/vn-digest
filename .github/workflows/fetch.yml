@@ -1,7 +1,7 @@
 name: daily-fetch
 on:
   schedule:
-    - cron: "45 22 * * *"    # 22:45 UTC == 05:45 Asia/Ho_Chi_Minh (UTC+7)
+    - cron: "15 22 * * *"    # 22:15 UTC == 05:15 Asia/Ho_Chi_Minh (UTC+7)
   workflow_dispatch: {}       # allow manual runs
 jobs:
   fetch:
