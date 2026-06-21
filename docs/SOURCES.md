@@ -42,7 +42,7 @@ Runs **per forum** in the `forums:` list. Entry format: `<slug>.<id>` (a `/f/` f
 **Ranked path (headless browser):**
 - Launch headless **Chromium** (Playwright), `goto https://voz.vn/<type>/<slug>/` — the **default listing = most-recently-active threads** (deliberately *not* `?order=view_count`, which returns stale all-time threads). voz fronts this with a Cloudflare **JS managed challenge** that plain HTTP can't pass; the real browser executes the challenge JS, then the thread rows appear (retries up to 2×).
 - Parse each `div.structItem--thread`: skip pinned/sticky; title + link (URL rewritten to **`/unread`** so clicking jumps to your first unread post); views/replies from the meta cell (`19K`→19000, `3M`→3000000); time from `.structItem-latestDate` (last activity). `score` = views (or replies if `rank_by: replies`); `subsource` = readable forum label (e.g. "diem bao").
-- **Per-forum cap** (`per_forum_items`): keep each forum's top-N by views so a high-traffic forum (e.g. Chuyện trò linh tinh) can't crowd out the rest.
+- **Per-forum cap** (`per_forum_items`): keep each forum's **N most-recently-active** threads (the listing is in last-activity order). Wide capture means rising topics get a stored baseline early (so they aren't lost — they may surface a day or two later), and no single busy forum crowds out the rest.
 
 **Fallback (RSS):** if Playwright is missing or the challenge isn't solved, fetch `https://voz.vn/<type>/<slug>/index.rss` (not challenged, but chronological, no counts). If *every* forum fell back, voz is relabeled **Latest**.
 

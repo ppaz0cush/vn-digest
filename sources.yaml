@@ -44,9 +44,11 @@ sources:
       - "s/chia-se-kien-thuc.104"   # Chia sẻ kiến thức (/s/ node)
     rank: top
     rank_by: views          # 'views' is harder to game than 'replies' (bumping)
-    per_forum_items: 4      # keep top-4 PER forum so no single forum dominates
-    window_hours: 24        # rank among threads ACTIVE in the last 24h
-    max_items: 28           # overall voz cap (7 forums × 4)
+    per_forum_items: 10     # keep the 10 MOST-RECENTLY-ACTIVE threads per forum
+                            # (wide capture so rising topics aren't lost; sort in
+                            # Notion by 'Δ today' or 'Score' to surface the hot ones)
+    window_hours: 24        # keep threads ACTIVE in the last 24h
+    max_items: 70           # overall voz cap (7 forums × 10)
     label: "Top"
 
   # (dailydev removed — its unauthenticated feed was a frozen all-time-popular
@@ -69,7 +71,7 @@ sources:
     trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
     window_hours: 24
-    max_items: 5
+    max_items: 15           # wider capture so important articles aren't lost
     label: "Top"
 
   - name: anonyviet

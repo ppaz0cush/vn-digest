@@ -200,8 +200,11 @@ def _from_rss(forum):
 def fetch(cfg):
     rank_by = cfg.get("rank_by", "views")
     use_browser = cfg.get("use_browser", True)
-    # Top-N threads kept PER forum, so a high-traffic forum (e.g. Chuyện trò
-    # linh tinh) can't crowd the others out of the combined voz ranking.
+    # Keep the N MOST-RECENTLY-ACTIVE threads per forum (the listing is already
+    # in last-activity order). Capturing active threads — not just the highest
+    # all-time-view ones — means rising topics get a stored baseline early, so
+    # we don't lose them (they may surface a day or two later). Also stops one
+    # busy forum from crowding out the others.
     per_forum = cfg.get("per_forum_items")
     all_items, ranked_items = [], 0
 
@@ -218,9 +221,8 @@ def fetch(cfg):
                                 skip_sticky=cfg.get("skip_sticky", True))
                 if parsed:
                     if per_forum:
-                        parsed = sorted(parsed, key=lambda x: x.get("score") or -1,
-                                        reverse=True)[:per_forum]
-                    print(f"[voz] {forum}: {len(parsed)} threads ranked by {rank_by} (browser)")
+                        parsed = parsed[:per_forum]   # most-recently-active (listing order)
+                    print(f"[voz] {forum}: {len(parsed)} most-active threads (browser)")
                     all_items.extend(parsed)
                     ranked_items += len(parsed)
                     continue
