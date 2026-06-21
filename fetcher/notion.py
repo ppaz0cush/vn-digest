@@ -186,19 +186,13 @@ def upsert_items(items):
 
     print(f"[notion] created {created}, updated {updated}, failed {failed}")
 
-    days = os.environ.get("NOTION_PRUNE_DAYS")
-    if days:
-        try:
-            prune(int(days))
-        except Exception as exc:
-            print(f"[notion] prune skipped ({exc})")
-
 
 def prune(days):
     """Archive rows whose Fetched date is older than `days`, EXCEPT ones you
     Saved (Status='Saved'). Archived pages go to Notion's trash (auto-deleted
-    after 30 days), so the database stays small and snappy — no manual cleanup,
-    and the database id / views / saved items are preserved."""
+    after 30 days). Run on demand (see fetcher/prune.py) — NOT during a normal
+    fetch — so cleanup is something you trigger yourself. The database id /
+    views / saved items are all preserved."""
     db_id = _config()[1]
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     payload = {

@@ -1,0 +1,23 @@
+name: prune-notion
+# Manual "clean up" button: run from the repo's Actions tab ("Run workflow"),
+# or with: gh workflow run prune-notion -f days=30
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Archive Notion rows older than this many days (keeps Saved)"
+        required: true
+        default: "30"
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - run: python -m fetcher.prune --days ${{ inputs.days }}
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}

@@ -117,12 +117,19 @@ triage is preserved. **One-time Notion setup:**
 4. Set `NOTION_TOKEN` + `NOTION_DB_ID` (env locally; GitHub secrets for CI) and
    set the `FETCH_TARGET` repo variable to `notion` or `both`.
 
-**Keeping the Notion DB lean:** set `NOTION_PRUNE_DAYS` (env locally, or a repo
-variable for CI) and each run auto-archives rows older than that many days —
-**except ones you Saved** — so the database never bloats. Archived rows go to
-Notion's trash. Don't delete the whole *database* to clean up: that changes the
-`NOTION_DB_ID` and wipes your views/saved items. Clear rows (or let pruning do
-it) instead.
+**Keeping the Notion DB lean (manual "clean up" button):** run pruning yourself
+whenever you want — it never runs during a normal fetch. It archives rows older
+than N days **except ones you Saved**:
+
+```bash
+set -a; . ./.env.local; set +a          # NOTION_TOKEN + NOTION_DB_ID
+python -m fetcher.prune --days 30
+```
+
+Or click **Run workflow** on the **prune-notion** GitHub Action (Actions tab),
+or `gh workflow run prune-notion -f days=30`. Archived rows go to Notion's
+trash. Don't delete the whole *database* to clean up: that changes the
+`NOTION_DB_ID` and wipes your views/saved items — prune (or clear rows) instead.
 
 `db.py` (Supabase) and `notion.py` share one fetcher, so scraper fixes apply to
 both. The Supabase version is tagged `supabase-v1` as a restore point.
