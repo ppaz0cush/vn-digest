@@ -124,10 +124,17 @@ def _iso(v):
 def _properties(item, *, creating):
     """Build the Notion properties payload for an item. On update we omit Status
     so the user's triage is never overwritten."""
+    # Source as multi-select: [source, sub-forum] e.g. ["voz", "diem bao"].
+    src_tags = []
+    if item.get("source"):
+        src_tags.append(item["source"])
+    if item.get("subsource"):
+        src_tags.append(item["subsource"])
+
     props = {
         "Title": {"title": _title(item.get("title"), item.get("url"))},
         "URL": {"url": item.get("url")},
-        "Source": {"select": {"name": item["source"]}} if item.get("source") else {"select": None},
+        "Source": {"multi_select": [{"name": t} for t in src_tags]},
         "Label": {"select": {"name": item["rank_label"]}} if item.get("rank_label") else {"select": None},
         "Score": {"number": item.get("score")},
         "Δ today": {"number": item.get("score_delta")},

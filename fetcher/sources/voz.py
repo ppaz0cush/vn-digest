@@ -53,6 +53,20 @@ def _rss_url(forum):
     return f"https://voz.vn/{t}/{s}/index.rss"
 
 
+def _forum_label(forum):
+    """'diem-bao.33' -> 'diem bao'; 's/review-san-pham.103' -> 'review san pham'."""
+    _, slug = _split_forum(forum)
+    return re.sub(r"\.\d+$", "", slug).replace("-", " ")
+
+
+def _unread(thread_url):
+    """Rewrite a thread URL to its /unread form, which (when logged in) jumps to
+    the reader's first unread post. e.g. /t/slug.123/ -> /t/slug.123/unread"""
+    m = re.match(r"(https?://voz\.vn/t/[^/]+\.\d+)", thread_url or "")
+    base = m.group(1) if m else (thread_url or "").rstrip("/")
+    return f"{base}/unread" if base else thread_url
+
+
 def _count(text):
     """Parse a XenForo engagement badge: '19K'->19000, '3M'->3000000,
     '1.2K'->1200, '821'->821, else None. (The dd has no title attr.)"""
@@ -119,9 +133,10 @@ def _parse(html, forum, rank_by="views", skip_sticky=True):
         else:
             score, stype = views, "views"
         items.append({
-            "url": url,
+            "url": _unread(url),                 # deep-link to first unread post
             "title": title,
             "source_detail": f"voz · {forum}",
+            "subsource": _forum_label(forum),    # e.g. "diem bao" (multi-select tag)
             "published_at": published,
             "score": score,
             "score_type": stype,
@@ -170,9 +185,10 @@ def _from_rss(forum):
         if not link or not title:
             continue
         items.append({
-            "url": link,
+            "url": _unread(link),
             "title": title,
             "source_detail": f"voz · {feed.feed.get('title') or forum}",
+            "subsource": _forum_label(forum),
             "published_at": struct_time_to_utc(e.get("published_parsed"))
                             or parse_date(e.get("published")),
             "score": None,

@@ -31,7 +31,9 @@ schema = {
         # The Title property is required and must be of type 'title'.
         "Title": {"title": {}},
         "URL": {"url": {}},
-        "Source": {"select": {}},
+        # multi_select so a row can carry both the source and its sub-forum,
+        # e.g. ["voz", "diem bao"] -> filter by either.
+        "Source": {"multi_select": {}},
         "Label": {"select": {}},
         "Status": {"select": {"options": [
             {"name": "New", "color": "yellow"},

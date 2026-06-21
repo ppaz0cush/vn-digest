@@ -10,6 +10,14 @@ from .http import post, USER_AGENT
 import requests
 
 
+# Columns that exist in the Supabase `items` table (migrations 0001 + 0002).
+_COLUMNS = {
+    "url", "source", "title", "source_detail", "published_at", "score",
+    "score_type", "rank_label", "rank_position", "metadata",
+    "prev_score", "score_delta", "last_score_at", "prev_score_at",
+}
+
+
 def _config():
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -52,6 +60,10 @@ def upsert_items(items):
     if not items:
         print("[db] nothing to upsert")
         return
+
+    # Only send columns that exist in the Supabase `items` table; drop any
+    # sink-specific extras (e.g. Notion's `subsource`).
+    items = [{k: v for k, v in it.items() if k in _COLUMNS} for it in items]
 
     url, key = _config()
     endpoint = f"{url}/rest/v1/items"

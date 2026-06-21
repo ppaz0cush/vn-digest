@@ -96,9 +96,12 @@ TARGET=notion python -m fetcher.main   # Notion only
 TARGET=both   python -m fetcher.main   # Notion + Supabase (keeps Supabase a hot backup)
 ```
 
-Items map to TYPED Notion properties (Source/Label/Status = select, Score/Δ
-today = number, Published = date, URL = url), so all of Notion's filtering and
-sorting work natively. On update the fetcher never overwrites `Status`, so your
+Items map to TYPED Notion properties (Source = **multi-select**, Label/Status =
+select, Score/Δ today = number, Published = date, URL = url), so all of Notion's
+filtering and sorting work natively. `Source` carries both the source and (for
+voz) the sub-forum, e.g. `["voz", "diem bao"]`, so you can filter by either.
+voz titles link to the thread's `/unread` page (jumps to your first unread post
+when logged in). On update the fetcher never overwrites `Status`, so your
 triage is preserved. **One-time Notion setup:**
 
 1. In a **new, dedicated Notion workspace** (search is per-workspace, so the

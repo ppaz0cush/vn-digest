@@ -73,6 +73,7 @@ def normalize(item, cfg):
         "rank_label": cfg.get("label", "Latest"),
         "rank_position": item.get("rank_position"),
         "metadata": item.get("metadata"),
+        "subsource": item.get("subsource"),   # sub-forum label (Notion multi-select); ignored by Supabase
         "prev_score": item.get("prev_score"),
         "score_delta": item.get("score_delta"),
         "last_score_at": item.get("last_score_at"),
