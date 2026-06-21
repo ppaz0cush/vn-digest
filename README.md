@@ -20,6 +20,30 @@ free tier.
 
 The fetcher is the only code; Notion is the storage **and** the UI.
 
+## Maintenance cheat-sheet 📌
+
+It runs itself — the fetch fires daily at **05:15 Vietnam time** (22:15 UTC) and
+writes into your Notion database. The only two things you ever do manually:
+
+### Prune (clean up Notion when it feels big)
+Archives **all** rows older than N days (no exceptions — Saved included, so keep
+anything important elsewhere). Pick any one:
+- **GitHub UI:** Actions tab → **prune-notion** → **Run workflow** → enter days (e.g. `30`).
+- **CLI:** `gh workflow run prune-notion -f days=30 -R ppaz0cush/vn-digest`
+- **Local:** `set -a; . ./.env.local; set +a && python -m fetcher.prune --days 30`
+
+> ⚠️ Don't *delete the database* to clean up — that changes `NOTION_DB_ID` and
+> breaks the cron. Prune instead (it keeps the same database).
+
+### Restart the cron if it stops
+GitHub **disables scheduled workflows after ~60 days of no repo activity** — so
+the daily run may silently stop. To bring it back, any one of:
+- **GitHub UI:** Actions tab → **daily-fetch** → **Enable workflow** button.
+- **CLI:** `gh workflow enable daily-fetch -R ppaz0cush/vn-digest`
+- Push any commit to the repo (resets the 60-day idle clock).
+
+To check it's alive: Actions tab → **daily-fetch** should show recent green runs.
+
 ## Repo layout
 
 ```

@@ -46,10 +46,10 @@ gh workflow run prune-notion -f days=30
 
 ## The daily cron
 
-`.github/workflows/fetch.yml` runs `python -m fetcher.main` daily at 00:00 UTC
-(07:00 Asia/Ho_Chi_Minh) and installs Chromium for the voz fetch. Run it
+`.github/workflows/fetch.yml` runs `python -m fetcher.main` daily at 22:15 UTC
+(05:15 Asia/Ho_Chi_Minh) and installs Chromium for the voz fetch. Run it
 on demand anytime with `gh workflow run daily-fetch` or the *Run workflow*
-button.
+button. (GitHub may delay scheduled runs by 5–30 min.)
 
 > **Why a daily cron and not on-demand?** The source feeds are ephemeral — they
 > only expose their latest ~20 items. The cron captures each day's posts before
