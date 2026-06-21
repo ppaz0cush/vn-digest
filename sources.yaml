@@ -1,4 +1,4 @@
-# Vietnamese Tech Digest — source configuration.
+# VN Digest — source configuration.
 #
 # THIS FILE is the "add/delete forums" mechanism. To add a voz sub-forum or
 # another feed, edit this file and commit. The fetcher reads it on every run.
@@ -16,7 +16,7 @@ sources:
     # Set the sub-forum(s) you want. Find the slug.id by opening the sub-forum on
     # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
     # Default below targets the "Điểm báo" (press/news) section. The generic
-    # site-wide feed is a noisy firehose — target tech/IT/news sections.
+    # site-wide feed is a noisy firehose — target the sections you actually want.
     # voz fronts its HTML listing with a Cloudflare JS "managed challenge" that
     # plain HTTP (requests/curl) cannot solve. We drive a headless browser
     # (Playwright/Chromium) which executes the challenge JS, then rank the

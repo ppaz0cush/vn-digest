@@ -1,4 +1,4 @@
-"""Create the VN Tech Digest database in Notion with the correct TYPED schema.
+"""Create the VN Digest database in Notion with the correct TYPED schema.
 
 Run ONCE after you've created the integration and a parent page:
 
@@ -26,7 +26,7 @@ headers = {
 
 schema = {
     "parent": {"type": "page_id", "page_id": parent},
-    "title": [{"type": "text", "text": {"content": "VN Tech Digest"}}],
+    "title": [{"type": "text", "text": {"content": "VN Digest"}}],
     "properties": {
         # The Title property is required and must be of type 'title'.
         "Title": {"title": {}},

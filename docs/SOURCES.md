@@ -9,7 +9,7 @@ Each run:
 4. **Filter → rank → cap** (`rank.py`, see bottom).
 5. Dedupe by URL within the source, then **upsert** to Notion.
 
-Every source returns items shaped: `url, title, source_detail, published_at, score, score_type` (voz also adds `subsource` and `metadata`). HTTP goes through a shared session with User-Agent `vn-tech-digest/1.0`; a browser UA is used only where a site requires it.
+Every source returns items shaped: `url, title, source_detail, published_at, score, score_type` (voz also adds `subsource` and `metadata`). HTTP goes through a shared session with User-Agent `vn-digest/1.0`; a browser UA is used only where a site requires it.
 
 ## Per source
 

@@ -1,9 +1,10 @@
-# Vietnamese Tech Digest
+# VN Digest
 
-A personal, single-user daily digest of top posts from Vietnamese & global tech
-sources. A scheduled job fetches each morning and writes the items into a
-**Notion database** — you read and triage them using Notion's own table /
-filters / views (web + mobile). All free tier.
+A personal, single-user daily digest of top posts from a set of Vietnamese &
+global sources (you choose them — not limited to any one topic). A scheduled job
+fetches each morning and writes the items into a **Notion database** — you read
+and triage them using Notion's own table / filters / views (web + mobile). All
+free tier.
 
 ## How it works
 

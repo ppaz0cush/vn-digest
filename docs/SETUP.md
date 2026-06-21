@@ -19,7 +19,7 @@ ongoing thing you touch is `sources.yaml`.
    → *New integration* → pick that workspace → copy the **secret**
    (`ntn_...`). This is your `NOTION_TOKEN`.
 
-3. **Create a page** in the workspace (e.g. "Tech Digest"), then on that page:
+3. **Create a page** in the workspace (e.g. "VN Digest"), then on that page:
    **••• menu → Connections → add your integration**. (This is what grants the
    token access — without it the API can't see the page.)
 
@@ -47,7 +47,7 @@ Open the database in Notion — you should see the rows.
 
 ## 3. Deploy the daily cron (GitHub Actions)
 
-1. Push this repo to GitHub (`gh repo create vn-tech-digest --private --source=. --push`).
+1. Push this repo to GitHub (`gh repo create vn-digest --private --source=. --push`).
 2. Add the two secrets:
    ```bash
    gh secret set NOTION_TOKEN  --body "ntn_xxx"
