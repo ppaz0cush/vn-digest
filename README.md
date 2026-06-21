@@ -85,6 +85,38 @@ Enabled by default for **voz / tinhte / vnexpress**; toggle per source with
 frozen, so its delta is always 0.) The delta is computed against the *previous
 fetch*, which is ~24h on the daily cron.
 
+## Write target: Supabase, Notion, or both
+
+The fetcher can write into Supabase (the static reader app) and/or a **Notion
+database** (use Notion's own table/filter/sort/views as the reader). Pick with
+the `TARGET` env var — `supabase` (default), `notion`, or `both`:
+
+```bash
+TARGET=notion python -m fetcher.main   # Notion only
+TARGET=both   python -m fetcher.main   # Notion + Supabase (keeps Supabase a hot backup)
+```
+
+Items map to TYPED Notion properties (Source/Label/Status = select, Score/Δ
+today = number, Published = date, URL = url), so all of Notion's filtering and
+sorting work natively. On update the fetcher never overwrites `Status`, so your
+triage is preserved. **One-time Notion setup:**
+
+1. In a **new, dedicated Notion workspace** (search is per-workspace, so the
+   archive won't pollute your main one), create an internal integration at
+   <https://www.notion.so/my-integrations> → copy its secret (`NOTION_TOKEN`).
+2. Create a page in that workspace and **connect the integration to it**
+   (page ••• menu → Connections).
+3. Create the database with the correct schema:
+   ```bash
+   NOTION_TOKEN=ntn_xxx NOTION_PARENT_PAGE_ID=<that page id> \
+     python setup/notion_init.py        # prints NOTION_DB_ID
+   ```
+4. Set `NOTION_TOKEN` + `NOTION_DB_ID` (env locally; GitHub secrets for CI) and
+   set the `FETCH_TARGET` repo variable to `notion` or `both`.
+
+`db.py` (Supabase) and `notion.py` share one fetcher, so scraper fixes apply to
+both. The Supabase version is tagged `supabase-v1` as a restore point.
+
 ## Deploy to the cloud (when happy locally)
 
 Do the one-time manual prereqs in `BUILD_SPEC.md` §4 (Supabase access token,

@@ -17,13 +17,28 @@ import traceback
 from pathlib import Path
 from datetime import datetime, timezone
 
+import os
 import yaml
 
 from . import rank as rankmod
-from .db import upsert_items, fetch_prev_scores
+from . import db as supabase_sink
+from . import notion as notion_sink
 from .sources import (
     rss_latest, rss_comments, vnexpress, voz, spiderum,
 )
+
+
+def get_sinks():
+    """Pick write targets from the TARGET env var: 'supabase' (default),
+    'notion', or 'both'. For 'both', Notion is primary (drives the deltas) so
+    switching to 'notion' later keeps the trend history continuous. Returns a
+    list of modules each exposing fetch_prev_scores() + upsert_items()."""
+    target = os.environ.get("TARGET", "supabase").lower()
+    if target == "notion":
+        return [notion_sink]
+    if target == "both":
+        return [notion_sink, supabase_sink]
+    return [supabase_sink]
 
 STRATEGIES = {
     "rss_latest": rss_latest.fetch,
@@ -135,8 +150,12 @@ def main():
     config = load_config()
     only = set(s.strip() for s in args.only.split(",")) if args.only else None
 
+    sinks = get_sinks()
+    print(f"write target(s): {', '.join(s.__name__.split('.')[-1] for s in sinks)}")
+
     run_ts = datetime.now(timezone.utc).isoformat()
-    prev_scores = fetch_prev_scores()  # {url: {score, last_score_at}}; {} if no DB
+    # Deltas come from the primary sink's previous snapshot.
+    prev_scores = sinks[0].fetch_prev_scores()  # {url: {score, last_score_at}}; {} if unreachable
     print(f"loaded {len(prev_scores)} previous scores for delta ranking")
 
     all_items = []
@@ -164,10 +183,11 @@ def main():
     print(f"\nTOTAL: {len(all_items)} items from {len(config.get('sources', []))} sources")
 
     if args.dry_run:
-        print("(dry-run: not writing to DB)")
+        print("(dry-run: not writing)")
         return
 
-    upsert_items(all_items)
+    for sink in sinks:
+        sink.upsert_items(all_items)
 
 
 if __name__ == "__main__":
