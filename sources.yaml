@@ -77,7 +77,7 @@ sources:
   - name: anonyviet
     url: "https://anonyviet.com/feed/"
     rank: latest
-    window_hours: 168       # 7 days (low volume)
+    window_hours: 24       # 7 days (low volume)
     max_items: 20
     label: "Latest"
 
@@ -95,6 +95,6 @@ sources:
   - name: engineerpro
     url: "https://engineerprovn.substack.com/feed"
     rank: latest
-    window_hours: 336       # 14 days — they post only ~2-3x/week
+    window_hours: 24       # 14 days — they post only ~2-3x/week
     max_items: 20
     label: "Latest"
