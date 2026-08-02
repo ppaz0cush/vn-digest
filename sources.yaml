@@ -36,19 +36,14 @@ sources:
     # slug.id by opening the forum on voz.vn and copying it from the URL.
     forums:
       - "diem-bao.33"               # Điểm báo (news)
-      - "phan-mem.13"               # Phần mềm
-      - "app-di-dong.21"            # App di động
       - "chuyen-tro-linh-tinh.17"   # Chuyện trò linh tinh™ (very high traffic)
       - "from-f17-with-love.69"     # from f17 with love
-      - "s/review-san-pham.103"     # Review sản phẩm  (/s/ node)
-      - "s/chia-se-kien-thuc.104"   # Chia sẻ kiến thức (/s/ node)
     rank: top
     rank_by: views          # 'views' is harder to game than 'replies' (bumping)
-    per_forum_items: 10     # keep the 10 MOST-RECENTLY-ACTIVE threads per forum
-                            # (wide capture so rising topics aren't lost; sort in
-                            # Notion by 'Δ today' or 'Score' to surface the hot ones)
+    per_forum_items: 3      # keep the 3 MOST-RECENTLY-ACTIVE threads per forum
+                            # (small capture so each forum contributes evenly)
     window_hours: 24        # keep threads ACTIVE in the last 24h
-    max_items: 70           # overall voz cap (7 forums × 10)
+    max_items: 9            # overall voz cap (3 forums × 3)
     label: "Top"
 
   # (dailydev removed — its unauthenticated feed was a frozen all-time-popular
@@ -61,7 +56,7 @@ sources:
     trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
     window_hours: 24
-    max_items: 5
+    max_items: 1
     label: "Top"
 
   - name: vnexpress
@@ -71,7 +66,7 @@ sources:
     trending: true          # rank by comments GAINED since last run (still-hot)
     tiebreak: published_desc
     window_hours: 24
-    max_items: 15           # wider capture so important articles aren't lost
+    max_items: 1            # top single item from the 24h window
     label: "Top"
 
   - name: anonyviet
@@ -89,7 +84,7 @@ sources:
     # NOTE: spiderum's listing exposes no post timestamps, so window_hours has no
     # effect here (dateless items are always kept) — max_items + page order rule.
     window_hours: 24
-    max_items: 5
+    max_items: 1
     label: "Latest"
 
   - name: engineerpro

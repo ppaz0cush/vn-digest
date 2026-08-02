@@ -23,7 +23,7 @@ Edit its block in `sources.yaml`. Common fields:
 
 | Field | Meaning |
 |---|---|
-| `forums` | List of sub-forums. Format `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` (e.g. `s/review-san-pham.103`). |
+| `forums` | List of sub-forums. Format `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` (e.g. `s/example-slug.103`). |
 | `use_browser` | `true` = headless-browser ranked fetch; `false` = RSS-only (no Playwright needed). |
 | `skip_sticky` | `true` = ignore pinned megathreads. |
 | `per_forum_items` | Keep top-N per forum so one busy forum can't dominate. |

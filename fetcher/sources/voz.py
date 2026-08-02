@@ -34,7 +34,7 @@ BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 
 def _split_forum(forum):
     """A forum entry is '<slug>.<id>' (a normal /f/ forum) or '<type>/<slug>.<id>'
-    for other node types, e.g. 's/review-san-pham.103' (voz's /s/ nodes)."""
+    for other node types, e.g. 's/example-slug.103' (voz's /s/ nodes)."""
     f = forum.strip().strip("/")
     if "/" in f:
         node_type, slug = f.split("/", 1)
@@ -54,7 +54,7 @@ def _rss_url(forum):
 
 
 def _forum_label(forum):
-    """'diem-bao.33' -> 'diem bao'; 's/review-san-pham.103' -> 'review san pham'."""
+    """'diem-bao.33' -> 'diem bao'; 's/example-slug.103' -> 'example slug'."""
     _, slug = _split_forum(forum)
     return re.sub(r"\.\d+$", "", slug).replace("-", " ")
 

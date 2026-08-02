@@ -16,13 +16,13 @@ Every source returns items shaped: `url, title, source_detail, published_at, sco
 ### tinhte — `sources/tinhte.py`
 - `GET https://tinhte.vn/rss`, parsed with feedparser.
 - Comment count is embedded in each item as `<slash:comments>` — read straight from the feed, no extra request → `score`, `score_type="comments"`.
-- Config: window 24h, `trending`, cap 5 → keep last-24h articles, rank by **comments gained since last run**, top 5.
+- Config: window 24h, `trending`, cap 1 → keep last-24h articles, rank by **comments gained since last run**, top 1.
 
 ### vnexpress — `sources/vnexpress.py`
 - `GET https://vnexpress.net/rss/so-hoa.rss` (the Số hóa section).
 - RSS has no comment counts, so: build items from the feed → **filter to the 24h window first** (to limit API calls) → for each survivor, extract the numeric id (`(\d+)\.html`) and call the public comment API
   `https://usi-saas.vnexpress.net/index/get?objectid=<ID>&objecttype=1&siteid=1000000&offset=0&limit=1` → read `data.totalitem` → `score`, `score_type="comments"`.
-- Config: window 24h, `trending`, cap 5.
+- Config: window 24h, `trending`, cap 1.
 
 ### anonyviet / engineerpro — `sources/anonyviet.py`, `sources/engineerpro.py`
 - Thin wrappers over `_rss.latest()`: `GET` the feed, take title/link/published, **no score**.
@@ -33,20 +33,20 @@ Every source returns items shaped: `url, title, source_detail, published_at, sco
 ### spiderum — `sources/spiderum.py`
 - `GET` the category page (`…/danh-muc/quan-diem-tranh-luan?sort=new&page_idx=1`) with a browser UA.
 - Tries the embedded `__NEXT_DATA__` JSON first; falls back to scraping `/bai-dang/` anchors (grouped by slug — title from the text anchor, views from a "2.2k" badge).
-- The listing exposes **no post dates**, so `published_at` is null → the window can't filter it; page order (newest-first) + cap 5 govern.
-- Config: `rank: latest`, cap 5.
+- The listing exposes **no post dates**, so `published_at` is null → the window can't filter it; page order (newest-first) + cap 1 govern.
+- Config: `rank: latest`, cap 1.
 
 ### voz — `sources/voz.py` (the complex one)
-Runs **per forum** in the `forums:` list. Entry format: `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` for other node types (e.g. `s/review-san-pham.103` for voz's `/s/` nodes).
+Runs **per forum** in the `forums:` list. Entry format: `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` for other node types (e.g. `s/example-slug.103` for voz's `/s/` nodes).
 
 **Ranked path (headless browser):**
 - Launch headless **Chromium** (Playwright), `goto https://voz.vn/<type>/<slug>/` — the **default listing = most-recently-active threads** (deliberately *not* `?order=view_count`, which returns stale all-time threads). voz fronts this with a Cloudflare **JS managed challenge** that plain HTTP can't pass; the real browser executes the challenge JS, then the thread rows appear (retries up to 2×).
 - Parse each `div.structItem--thread`: skip pinned/sticky; title + link (URL rewritten to **`/unread`** so clicking jumps to your first unread post); views/replies from the meta cell (`19K`→19000, `3M`→3000000); time from `.structItem-latestDate` (last activity). `score` = views (or replies if `rank_by: replies`); `subsource` = readable forum label (e.g. "diem bao").
-- **Per-forum cap** (`per_forum_items`): keep each forum's **N most-recently-active** threads (the listing is in last-activity order). Wide capture means rising topics get a stored baseline early (so they aren't lost — they may surface a day or two later), and no single busy forum crowds out the rest.
+- **Per-forum cap** (`per_forum_items`): keep each forum's **N most-recently-active** threads (the listing is in last-activity order). Small capture keeps each forum represented evenly, and no single busy forum crowds out the rest.
 
 **Fallback (RSS):** if Playwright is missing or the challenge isn't solved, fetch `https://voz.vn/<type>/<slug>/index.rss` (not challenged, but chronological, no counts). If *every* forum fell back, voz is relabeled **Latest**.
 
-- Config: 7 forums, window 24h, `rank_by: views`, `trending`, `per_forum_items: 4`, overall cap 28.
+- Config: 3 forums, window 24h, `rank_by: views`, `trending`, `per_forum_items: 3`, overall cap 9.
 
 ## Post-processing (`fetcher/rank.py`)
 
