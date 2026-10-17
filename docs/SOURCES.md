@@ -37,10 +37,9 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 - Each thread row gives: thread id, title, link (rewritten to **`/unread`** so
   clicking jumps to your first unread post), views and replies (rounded, e.g.
   `41K`, `3M`), start date and last-post date. Pinned threads are skipped.
-- Pages are read until the lowest view total on a page is below the weekly gain
-  a thread of that forum currently needs to make the list (max `max_pages`). A
-  thread can't gain more views than it has in total, so nothing further down can
-  make the list.
+- Pages are read until the lowest view total on a page is below the current
+  20th-best weekly gain (max `max_pages`). A thread can't gain more views than it
+  has in total, so nothing further down can make the list.
 - Counts are recorded per thread: first seen (time, views), latest views, and
   the baseline set at the last weekly list.
 
@@ -49,12 +48,8 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 - Threads first seen mid-week count from when they were first seen.
 - Threads shown in millions (`max_views`) are skipped: voz rounds them to whole
   millions, so their weekly gain can't be measured.
-- The 20 places are shared evenly across the forums (`split: even`: 7/7/6), so
-  Điểm báo's news threads, which get by far the most views, can't take every
-  place. Places a forum can't fill go to the best of the rest. (`split:
-  overall` = one ranking across all forums.)
-- Then every thread's current views become next week's baseline, and threads
-  not seen all week are forgotten.
+- Top 20 across the 3 forums. Then every thread's current views become next
+  week's baseline, and threads not seen all week are forgotten.
 
 ### tinhte: `sources/tinhte.py` (weekly top 2 by comments)
 - **Every run:** `GET https://tinhte.vn/rss` (about the last day of articles);
@@ -63,6 +58,11 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
   an article for about a day, so the 10 most-commented candidates
   (`refresh_top`) get their current count re-read from the article page (the
   `commentCount` in its JSON-LD). Top 2 by comments.
+- The feed's date is when an article reached the front page (hours to days
+  after it was written), and the feed sometimes re-features an article that's
+  months old, with a fresh date and all its old comments. So the page's own
+  `datePublished` is checked too: an article first published more than 7 days
+  before the week started is skipped (and doesn't use up a `refresh_top` place).
 
 ### vnexpress: `sources/vnexpress.py` (weekly top 2 by comments)
 - **Every run:** `GET https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss` (the
@@ -82,9 +82,12 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
   `https://engineerprovn.substack.com/api/v1/archive?sort=new&offset=<n>&limit=50`
   lists the whole history (articles and podcast episodes, incl. paid-only
   posts), so the first run writes the full archive and later runs add new posts.
+  It's paged until an empty page: a short page isn't the end (the first page
+  stops at 23 posts whatever the `limit`).
 - **Substack answers GitHub's servers with 403** (a known Substack block since
   Jan 2024; home networks work). So each archive page is fetched by the first
-  method that works: a direct request → a headless Chromium (gets through if
+  method that works (starting with the one that worked for the previous page):
+  a direct request → a headless Chromium (gets through if
   the block is a Cloudflare challenge) → **Jina Reader** (`https://r.jina.ai/<url>`),
   a free public service that fetches the public URL from its own servers. The
   run summary says which one worked (`via ...`). The RSS feed (latest 20, same

@@ -7,22 +7,18 @@ list "updated in the last 7 days, sorted by views":
     https://voz.vn/f/<slug>.<id>/page-<n>?last_days=7&order=view_count&direction=desc
 
 and records every (non-pinned) thread's view count in the tracking state.
-Pages are read until the lowest total on a page is below the weekly gain a
-thread currently needs to make the list: a thread can't gain more views in a
-week than it has in total, so nothing further down is skipped (max_pages caps
-the work).
+Pages are read until the lowest total on a page is below the current N-th best
+weekly gain: a thread can't gain more views in a week than it has in total, so
+nothing that could still make the top N is skipped (max_pages caps the work).
 
 At publish, gain = views now - views at the last publish. Threads started
 during the week count all their views; threads first seen mid-week count from
-when they were first seen. With `split: even` the `top` places are shared
-evenly across the forums (20 -> 7/7/6), so news in Điểm báo can't crowd out
-the other forums; places a forum can't fill go to the best of the rest. voz
-rounds view counts ("41K", "3M"), so threads above max_views (shown in whole
-millions) are left out: their weekly gain can't be measured.
+when they were first seen. voz rounds view counts ("41K", "3M"), so threads
+above max_views (shown in whole millions) are left out: their weekly gain
+can't be measured.
 """
 import re
 import time
-from collections import Counter
 from datetime import datetime, timezone
 
 from bs4 import BeautifulSoup
@@ -212,53 +208,6 @@ def ranked(items, week_start, max_views=None):
     return out
 
 
-def _quotas(cfg):
-    """Places per forum: `top` shared evenly (split: even, e.g. 20 -> 7/7/6),
-    or None for one overall ranking (split: overall)."""
-    forums, top = cfg.get("forums", []), cfg.get("top", 20)
-    if cfg.get("split", "even") != "even" or len(forums) < 2:
-        return None
-    base, extra = divmod(top, len(forums))
-    return {f: base + (1 if i < extra else 0) for i, f in enumerate(forums)}
-
-
-def select(items, week_start, cfg):
-    """This week's list, best gain first. With split: even every forum gets its
-    share of `top`; places a forum can't fill go to the best of the rest."""
-    best = ranked(items, week_start, cfg.get("max_views"))
-    top = cfg.get("top", 20)
-    quotas = _quotas(cfg)
-    if quotas is None:
-        return best[:top]
-    picked, taken = [], Counter()
-    for r in best:
-        forum = r[2].get("forum")
-        if taken[forum] < quotas.get(forum, 0):
-            picked.append(r)
-            taken[forum] += 1
-    chosen = {id(r[2]) for r in picked}
-    picked += [r for r in best if id(r[2]) not in chosen][: top - len(picked)]
-    picked.sort(key=lambda r: (r[0], r[1]), reverse=True)
-    return picked
-
-
-def _cutoffs(items, week_start, cfg):
-    """Per forum, the weekly gain a thread currently needs to make the list:
-    its forum's quota-th best gain, or the overall top-th best (the bar for the
-    places a forum can't fill), whichever is lower; 0 while there are too few."""
-    best = ranked(items, week_start, cfg.get("max_views"))
-    top = cfg.get("top", 20)
-    overall = best[top - 1][0] if len(best) >= top else 0
-    quotas = _quotas(cfg)
-    if quotas is None:
-        return {f: overall for f in cfg.get("forums", [])}
-    out = {}
-    for forum, quota in quotas.items():
-        gains = [g for g, _v, it, _b in best if it.get("forum") == forum]
-        out[forum] = min(gains[quota - 1], overall) if quota and len(gains) >= quota else 0
-    return out
-
-
 def _record(items, t, now):
     it = items.get(t["id"])
     if it is None:
@@ -276,16 +225,18 @@ def _record(items, t, now):
 
 
 def collect(cfg, src, now, week_start, browser=Browser):
-    """Record the view counts of every thread that could make this week's list."""
+    """Record the view counts of every thread that could make this week's top N."""
     items = src["items"]
+    top = cfg.get("top", 20)
     max_pages = cfg.get("max_pages", 8)
+    max_views = cfg.get("max_views")
     skip_sticky = cfg.get("skip_sticky", True)
-    cutoffs = _cutoffs(items, week_start, cfg)
+    current = ranked(items, week_start, max_views)
+    cutoff = current[top - 1][0] if len(current) >= top else 0
 
     seen_ids, failed, total_pages = set(), [], 0
     with browser() as br:
         for forum in cfg.get("forums", []):
-            cutoff = cutoffs.get(forum, 0)
             got = pages = 0
             for n in range(1, max_pages + 1):
                 try:
@@ -307,16 +258,16 @@ def collect(cfg, src, now, week_start, browser=Browser):
                 lowest = min((t["views"] for t in threads if t["views"] is not None), default=None)
                 if lowest is None or lowest < cutoff:
                     break
-            print(f"[voz] {forum}: {got} threads from {pages} page(s) (cutoff {cutoff:,} views)")
+            print(f"[voz] {forum}: {got} threads from {pages} page(s)")
             total_pages += pages
     if failed:
         raise RuntimeError(f"couldn't load {', '.join(failed)}")
-    return f"{len(seen_ids)} threads from {total_pages} pages"
+    return f"{len(seen_ids)} threads from {total_pages} pages (top-{top} cutoff {cutoff:,} views)"
 
 
 def publish(cfg, src, now, week_start):
-    """This week's list (see select), as Notion rows."""
-    best = select(src["items"], week_start, cfg)
+    """This week's top N by views gained, as Notion rows."""
+    best = ranked(src["items"], week_start, cfg.get("max_views"))[: cfg.get("top", 20)]
     return [{
         "url": it["url"], "title": it["title"], "source": "voz", "subsource": it.get("subsource"),
         "label": "Top", "score": it.get("views"), "prev_score": base, "delta": gain,

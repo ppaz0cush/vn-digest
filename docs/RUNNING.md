@@ -126,9 +126,6 @@ a fake Notion.
 - **engineerpro failed**: Substack blocks GitHub's servers, so it depends on
   the browser / Jina Reader fallbacks (see [SOURCES.md](SOURCES.md)). The error
   of each method is in `last_error` in `state.json` on the `state` branch.
-- **Only Điểm báo threads in the voz list**: check `split: even` in
-  `sources.yaml`. Also, the first list after setup only counts threads started
-  that week, because older threads have no earlier count to compare against yet.
 - **`NOTION_TOKEN must be set`**: you didn't source `.env.local` (or the GitHub
   secrets aren't set). Use `--dry-run` to test without Notion.
 - **"refusing to touch the original database"**: `NOTION_WEEKLY_DB_ID` is set

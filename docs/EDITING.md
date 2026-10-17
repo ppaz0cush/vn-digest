@@ -21,12 +21,11 @@ Edit its block in `sources.yaml`. Fields:
 |---|---|
 | `forums` | Sub-forums. Format `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` (e.g. `s/example-slug.103`). |
 | `max_pages` | Most list pages read per forum per run (20 threads each). |
-| `split` | `even` (default) = the `top` places are shared evenly across forums (20 → 7/7/6); `overall` = one ranking across all forums. |
 | `skip_sticky` | `true` = ignore pinned threads. |
 | `max_views` | Threads above this are skipped (voz shows 1M+ rounded to whole millions). |
 
 **tinhte-only:** `refresh_top`: how many top candidates get their comment count
-re-read from the article page at publish.
+(and real publish date) re-read from the article page at publish.
 
 **engineerpro-only:** `archive_url`: Substack's archive API (full history);
 `url` is the RSS fallback.

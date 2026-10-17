@@ -23,10 +23,7 @@ sources:
     # Ranked by views GAINED this week. Each run reads every forum's own list
     # "updated in the last 7 days, sorted by views" in a headless browser (voz
     # sits behind Cloudflare) and records the counts.
-    top: 20                # 20 threads per week...
-    split: even            # ...shared evenly across the forums (7/7/6), so
-                           # Điểm báo news can't take every place. `overall` =
-                           # one ranking across all forums.
+    top: 20                # top 20 across all forums below
     # Forum format: '<slug>.<id>' for normal /f/ forums, or '<type>/<slug>.<id>'
     # for other node types (voz's /s/ nodes). Copy it from the forum's URL.
     forums:
@@ -34,7 +31,7 @@ sources:
       - "chuyen-tro-linh-tinh.17"   # Chuyện trò linh tinh™ (very high traffic)
       - "from-f17-with-love.69"     # from f17 with love (love, marriage, family)
     max_pages: 8           # per forum per run; reading stops once totals drop
-                           # below the gain a thread needs to make the list
+                           # below the current 20th-best gain
     skip_sticky: true      # ignore pinned threads
     max_views: 999999      # voz shows 1M+ as "1M", "3M": their weekly gain
                            # can't be measured, so those threads are skipped

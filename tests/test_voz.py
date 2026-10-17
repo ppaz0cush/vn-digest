@@ -80,51 +80,6 @@ def test_publish_rows_then_start_next_week():
     assert src["items"]["new"]["base_views"] == 30_000      # next week counts from here
 
 
-# --- sharing the places between forums (split: even) -----------------------------
-
-FORUMS = ["news.1", "chat.2", "love.3"]
-
-
-def forum_items():
-    """news gains 90K..50K, chat 9K..5K, love only 2 threads (1K, 500)."""
-    items = {}
-    for forum, gains in (("news.1", [90, 80, 70, 60, 50]), ("chat.2", [9, 8, 7, 6, 5]),
-                         ("love.3", [1, 0.5])):
-        for i, g in enumerate(gains):
-            it = item(f"{forum}-{i}", int(g * 1000), base=0)
-            it["forum"] = forum
-            items[it["title"]] = it
-    return items
-
-
-def test_even_split_gives_every_forum_a_share():
-    cfg = {"forums": FORUMS, "top": 7}                       # 7 -> 3/2/2 places
-    picked = [it["title"] for _g, _v, it, _b in voz.select(forum_items(), WEEK, cfg)]
-    assert picked == ["news.1-0", "news.1-1", "news.1-2", "chat.2-0", "chat.2-1",
-                      "love.3-0", "love.3-1"]
-
-
-def test_places_a_forum_cannot_fill_go_to_the_best_of_the_rest():
-    cfg = {"forums": FORUMS, "top": 9}                       # 3/3/3, but love has only 2
-    picked = [it["title"] for _g, _v, it, _b in voz.select(forum_items(), WEEK, cfg)]
-    assert len(picked) == 9 and picked.count("love.3-0") == 1
-    assert "news.1-3" in picked                              # the spare place: next-best overall
-
-
-def test_overall_split_is_one_ranking():
-    cfg = {"forums": FORUMS, "top": 5, "split": "overall"}
-    picked = [it["forum"] for _g, _v, it, _b in voz.select(forum_items(), WEEK, cfg)]
-    assert picked == ["news.1"] * 5
-
-
-def test_paging_cutoff_per_forum():
-    cfg = {"forums": FORUMS, "top": 7}                       # quotas 3/2/2
-    cutoffs = voz._cutoffs(forum_items(), WEEK, cfg)
-    # news: its 3rd best (70K) but never above the overall 7th best (8K)
-    assert cutoffs == {"news.1": 8_000, "chat.2": 8_000, "love.3": 500}
-    assert voz._cutoffs({}, WEEK, cfg) == {f: 0 for f in FORUMS}   # nothing known yet: read all
-
-
 # --- collecting: paging stops once nothing on later pages can make the top N -----
 
 def listing(rows):

@@ -9,7 +9,7 @@ What lands in Notion (the **"VN Digest Weekly"** database):
 
 | Source | What | When |
 |---|---|---|
-| voz (Điểm báo, Chuyện trò linh tinh™, from f17 with love) | the 20 threads that **gained the most views** that week, shared across the 3 forums (7/7/6) | Monday morning |
+| voz (Điểm báo, Chuyện trò linh tinh™, from f17 with love) | the 20 threads that **gained the most views** that week | Monday morning |
 | tinhte | the 2 most-commented articles published that week | Monday morning |
 | vnexpress (Khoa học công nghệ) | the 2 most-commented articles published that week | Monday morning |
 | anonyviet | every new post | as soon as a run sees it |

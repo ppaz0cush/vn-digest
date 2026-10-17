@@ -1,9 +1,11 @@
 """engineerpro — every post of EngineerPro VN's Substack (mode: all).
 
 Substack's archive API lists the whole history (the RSS feed only has the latest
-20). Substack answers GitHub Actions runners with 403 (a known Substack block
-since Jan 2024; home networks are fine), so each archive page is fetched by the
-first method that works:
+20); it's paged until an empty page, as the first page stops at 23 posts
+whatever the limit. Substack answers GitHub Actions runners with 403 (a known
+Substack block since Jan 2024; home networks are fine), so each archive page is
+fetched by the first method that works, starting with the one that worked for
+the previous page:
   1. direct request (works locally);
   2. headless Chromium (gets through if the block is a Cloudflare JS challenge);
   3. Jina Reader (https://r.jina.ai/<url>), a free public service that fetches
@@ -68,7 +70,8 @@ METHODS = [("direct", _direct), ("browser", _browser), ("r.jina.ai", _jina)]
 def _archive_page(url):
     global last_via
     errors = []
-    for name, method in METHODS:
+    # Start with the method that worked for the previous page (stable sort).
+    for name, method in sorted(METHODS, key=lambda m: m[0] != last_via):
         try:
             page = method(url)
             last_via = name
@@ -79,22 +82,27 @@ def _archive_page(url):
 
 
 def _archive(cfg):
-    posts, offset = [], 0
+    posts, seen, offset = [], set(), 0
     while offset < MAX_POSTS:
         page = _archive_page(f"{cfg['archive_url']}?sort=new&search=&offset={offset}&limit={PAGE_SIZE}")
-        for p in page:
-            url, title = p.get("canonical_url"), (p.get("title") or "").strip()
-            if url and title:
+        # A short page isn't the end: Substack caps the first page (23 posts,
+        # whatever the limit). Only an empty page, or one with nothing new, is.
+        fresh = [p for p in page if p.get("canonical_url") and p["canonical_url"] not in seen]
+        if not fresh:
+            break
+        for p in fresh:
+            url, title = p["canonical_url"], (p.get("title") or "").strip()
+            seen.add(url)
+            if title:
                 posts.append({"url": url, "title": title,
                               "published_at": parse_date(p.get("post_date"))})
-        if len(page) < PAGE_SIZE:
-            break
         offset += len(page)
     return posts
 
 
 def fetch(cfg):
     global last_via
+    last_via = None
     if cfg.get("archive_url"):
         try:
             return _archive(cfg)
