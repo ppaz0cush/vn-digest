@@ -1,7 +1,7 @@
-"""anonyviet — plain chronological RSS feed (https://anonyviet.com/feed/).
+"""anonyviet — every post from https://anonyviet.com/feed/ (mode: all).
 
-Low-volume tutorial blog; no engagement metric, so label is 'Latest'.
-Config: long window (7 days) so the section isn't empty on quiet days.
+The feed holds the latest 10 posts (about a week), and runs happen several
+times a day, so nothing is missed. `lookback_days` keeps old posts out.
 """
 from ._rss import latest
 

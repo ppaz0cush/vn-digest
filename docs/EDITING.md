@@ -5,28 +5,35 @@ so most changes are just edits there + a commit.
 
 ## Tune an existing source
 
-Edit its block in `sources.yaml`. Common fields:
+Edit its block in `sources.yaml`. Fields:
 
 | Field | Applies to | Meaning |
 |---|---|---|
-| `name` | all | Must match a key in `SOURCES` in `fetcher/main.py` (this is how it's dispatched). |
+| `name` | all | Must match a key in `WEEKLY_SOURCES` / `ALL_SOURCES` in `fetcher/main.py` (this is how it's dispatched). |
+| `mode` | all | `weekly_top` (tracked all week, top N published on Monday) or `all` (every post, as soon as it's seen). |
+| `top` | weekly_top | How many make the weekly list. |
 | `url` | feed sources | The RSS/feed URL. |
-| `rank` | all | `top` (by engagement) or `latest` (chronological). |
-| `rank_by` | `top` | `views`, `comments`, etc. (which `score` to rank by). |
-| `trending` | `top` | `true` → rank by **gain since last run** instead of the lifetime total. |
-| `tiebreak` | `top` | `published_desc` to break score ties by newest. |
-| `window_hours` | all | Recency look-back. `null` = no window. (No effect if items have no date, e.g. spiderum.) |
-| `max_items` | all | Cap after ranking. |
-| `label` | all | `Top` / `Latest` — the honest tag shown in Notion's `Label`. |
+| `lookback_days` | all | Only posts from the last N days; `null` = no limit (whole history). |
 
 **voz-only fields:**
 
 | Field | Meaning |
 |---|---|
-| `forums` | List of sub-forums. Format `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` (e.g. `s/example-slug.103`). |
-| `use_browser` | `true` = headless-browser ranked fetch; `false` = RSS-only (no Playwright needed). |
-| `skip_sticky` | `true` = ignore pinned megathreads. |
-| `per_forum_items` | Keep top-N per forum so one busy forum can't dominate. |
+| `forums` | Sub-forums. Format `<slug>.<id>` (a `/f/` forum) or `<type>/<slug>.<id>` (e.g. `s/example-slug.103`). |
+| `max_pages` | Most list pages read per forum per run (20 threads each). |
+| `skip_sticky` | `true` = ignore pinned threads. |
+| `max_views` | Threads above this are skipped (voz shows 1M+ rounded to whole millions). |
+
+**tinhte-only:** `refresh_top`: how many top candidates get their comment count
+re-read from the article page at publish.
+
+**engineerpro-only:** `archive_url`: Substack's archive API (full history);
+`url` is the RSS fallback.
+
+**When the weekly list is published:** the top-level `publish:` block
+(`weekday`, `hour`, `timezone`). Runs happen at 03:15, 09:15, 15:15 and 21:15
+Vietnam time (`.github/workflows/fetch.yml`), so pick an hour just before one
+of those.
 
 ### Add / remove a voz sub-forum
 Open the forum on voz.vn, copy the `<slug>.<id>` from its URL
@@ -35,54 +42,48 @@ nodes the URL is `/s/<slug>.<id>/` → write it as `s/<slug>.<id>`. Commit.
 
 ## Add a brand-new source
 
-3 steps:
-
-1. **Create the module** `fetcher/sources/<name>.py` exposing `fetch(cfg)` that
-   returns a list of dicts with these keys:
-   ```python
-   {
-     "url": "...",            # required, unique (dedup key)
-     "title": "...",          # required
-     "source_detail": "...",  # optional, free text
-     "published_at": dt,      # tz-aware datetime or None
-     "score": 123,            # int engagement count, or None
-     "score_type": "comments" # 'comments'|'views'|... or None
-   }
-   ```
-   `main.py` handles delta/window/rank/cap/dedup — your module only fetches.
-   - **Plain RSS?** Reuse the helper:
+1. **Create the module** `fetcher/sources/<name>.py`.
+   - **`mode: all`** (every post): expose `fetch(cfg)` returning a list of
+     ```python
+     {"url": "...", "title": "...", "published_at": dt}   # tz-aware datetime or None
+     ```
+     Plain RSS? Reuse the helper:
      ```python
      from ._rss import latest
      def fetch(cfg):
          return latest(cfg)
      ```
-   - **RSS with a count, or HTML/JSON?** See `tinhte.py` / `spiderum.py` /
-     `voz.py` for patterns (and `_rss.fetch_feed`, `fetcher/http.get`,
-     `fetcher/util` date helpers).
+   - **`mode: weekly_top`**: expose three functions, each getting the source's
+     slice of the tracking file (`src["items"]` is yours to fill):
+     - `collect(cfg, src, now, week_start)`: record what you see; return a
+       short summary string.
+     - `publish(cfg, src, now, week_start)`: return the week's top N as rows
+       (see `weekly.comment_row` for the shape).
+     - `after_publish(src, now, week_start)`: reset for the next week, if needed.
+
+     See `tinhte.py` (counts in the feed), `vnexpress.py` (counts from an API)
+     and `voz.py` (HTML + gains), plus `_rss.fetch_feed`, `fetcher/http.get` and
+     the `fetcher/util` date helpers.
 
 2. **Register it** in `fetcher/main.py`:
    ```python
    from .sources import ..., yoursource
-   SOURCES = { ..., "yoursource": yoursource.fetch }
+   ALL_SOURCES = {..., "yoursource": yoursource}      # or WEEKLY_SOURCES
    ```
 
-3. **Add a config block** to `sources.yaml` with `name: yoursource` and the
-   fields above.
+3. **Add a config block** to `sources.yaml` with `name: yoursource`, its `mode`
+   and the fields above.
 
-Test it: `python -m fetcher.main --dry-run --only yoursource`.
+Test it: `python -m fetcher.main --dry-run --publish --only yoursource`.
 
 ## Remove a source
 
 Delete its block from `sources.yaml` (enough to stop fetching it). To remove it
-fully, also delete `fetcher/sources/<name>.py` and its line in `SOURCES`.
-Existing rows already in Notion stay until you prune them.
+fully, also delete `fetcher/sources/<name>.py` and its line in `main.py`. Its
+rows already in Notion stay until you prune them.
 
 ## Notes
 
-- **Honest labels:** if a source has no real engagement number, use `rank:
-  latest` / `label: Latest` — don't call a chronological feed "Top".
-- **Windows rule of thumb:** short (24h) for high-volume ranked sources so you
-  get *today's* hot items; long (7–14d) for low-volume ones so the section
-  isn't empty on quiet days.
-- After editing, the daily cron picks it up automatically; or run it once with
+- **Honest labels:** weekly lists are `Top`; every-post sources are `Latest`.
+- After editing, the schedule picks it up automatically; or run it once with
   `gh workflow run daily-fetch`.

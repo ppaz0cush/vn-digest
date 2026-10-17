@@ -11,26 +11,77 @@ set -a; . ./.env.local; set +a      # exports NOTION_TOKEN + NOTION_DB_ID
 ```bash
 .venv/bin/python -m fetcher.main
 ```
-Reads `sources.yaml`, fetches every source, ranks/filters, and upserts into
-Notion (creates new rows, updates existing ones by URL — never touching your
-`Status`).
+Each run:
+1. **'all' sources** (anonyviet, engineerpro): posts not written before are
+   created in Notion. A post is written once, so pruning it doesn't bring it back.
+2. **Weekly sources** (voz, tinhte, vnexpress): view/comment counts are recorded
+   in the tracking file. Nothing is written to Notion.
+3. **Weekly publish:** the first run after Monday 03:00 Vietnam time (the
+   `publish:` block in `sources.yaml`) writes each weekly source's top N. Rows
+   are keyed by URL: a thread already in Notion is updated, and your `Status` is
+   never touched.
 
 Useful flags:
 
 | Command | What it does |
 |---|---|
-| `python -m fetcher.main --dry-run` | Fetch and print, **no writes**. Works without Notion creds. |
-| `python -m fetcher.main --only voz,tinhte` | Run just those sources. |
-| `python -m fetcher.main --dry-run --only voz` | Debug one source quickly. |
+| `python -m fetcher.main --dry-run` | Fetch and print, **no Notion writes**, tracking file not saved. Works without Notion creds. |
+| `python -m fetcher.main --dry-run --publish` | ... and print what this week's lists would be. |
+| `python -m fetcher.main --publish` | Publish the weekly lists now instead of waiting for Monday. |
+| `python -m fetcher.main --only voz,tinhte` | Run just those sources (never auto-publishes). |
+| `python -m fetcher.main --state path.json` | Use another tracking file (default `.state/state.json`). |
 
-The run prints a per-source summary; each source is wrapped in try/except, so
-one failing source (e.g. voz blocked) logs and the rest still run.
+The run prints a per-source summary (also shown on the GitHub run page). Each
+source is wrapped in try/except, so one failing source logs and the rest still
+run.
+
+## The schedule
+
+`.github/workflows/fetch.yml` runs at 02:15, 08:15, 14:15 and 20:15 UTC (09:15,
+15:15, 21:15, 03:15 Vietnam time), so the 03:15 Monday run publishes. GitHub
+may start scheduled runs late (hours, sometimes), and a late or skipped run just
+means the next run publishes. Manual runs: Actions tab → **daily-fetch** → *Run
+workflow*, with two tick boxes:
+- **publish**: publish the weekly lists now;
+- **dry_run**: print only (no Notion writes, tracking file not saved).
+
+Or from the CLI: `gh workflow run daily-fetch -f publish=true -f dry_run=true`.
+
+**Alerting:** a run fails (red; GitHub emails you) only when a source has failed
+4 runs in a row (about a day), or the weekly publish couldn't be written. A
+failed publish is retried by the next run.
+
+**Keepalive:** each scheduled run re-enables the workflow, because GitHub
+disables schedules in public repos after 60 days without activity.
+
+> **Why collect all week?** The feeds only show their latest items (tinhte about
+> a day), and voz shows lifetime view totals only. Counting views *gained* this
+> week, or finding the week's most-commented articles, needs counts recorded
+> along the way.
+
+## The tracking file
+
+A small JSON file with everything the weekly ranking needs: view/comment counts
+seen this week, when the last list went out, which posts were already written,
+and the weekly database's id. In CI it lives on the repo's **`state` branch**
+(`state.json`, a single commit replaced every run, so the branch never grows).
+The workflow copies it to `.state/state.json` before a run and pushes it back
+after. You can open it on GitHub to see why something ranked.
+
+Locally the fetcher uses its own `.state/state.json` (gitignored). It's
+separate from CI's, but rows are keyed by URL, so local runs never duplicate
+anything.
+
+If the file is ever lost, nothing breaks: the next run starts fresh and the
+following weekly list is partial (older voz threads only count views from
+when they were first seen again).
 
 ## Prune (the button)
 
-Cleanup is **manual** — it never runs during a fetch. It archives **all** rows
-older than N days (no exceptions — Saved rows are deleted too, so save anything
-you want to keep elsewhere). Archived rows go to Notion's trash.
+Cleanup is **manual**. It archives **all** rows of "VN Digest Weekly" last
+fetched more than N days ago (Saved included, so save anything you want to keep
+elsewhere). Archived rows go to Notion's trash. The original database is never
+touched.
 
 **Locally:**
 ```bash
@@ -44,35 +95,36 @@ days. Or:
 gh workflow run prune-notion -f days=30
 ```
 
-## The daily cron
-
-`.github/workflows/fetch.yml` runs `python -m fetcher.main` daily at 22:15 UTC
-(05:15 Asia/Ho_Chi_Minh) and installs Chromium for the voz fetch. Run it
-on demand anytime with `gh workflow run daily-fetch` or the *Run workflow*
-button. (GitHub may delay scheduled runs by 5–30 min.)
-
-> **Why a daily cron and not on-demand?** The source feeds are ephemeral — they
-> only expose their latest ~20 items. The cron captures each day's posts before
-> they age out of the feeds; if you only fetched when you visited, you'd only
-> ever get "today," never the days you missed.
-
 ## Environment variables
 
 | Var | Used by | Notes |
 |---|---|---|
 | `NOTION_TOKEN` | fetch, prune | Integration secret (`ntn_...`). GitHub secret in CI. |
-| `NOTION_DB_ID` | fetch, prune | Target database id. GitHub secret in CI. |
-| `NOTION_PARENT_PAGE_ID` | `setup/notion_init.py` | Only for the one-time DB creation. |
+| `NOTION_DB_ID` | fetch, prune | The **original** database: read once to find its page (to create the weekly one next to it); never written. GitHub secret. |
+| `NOTION_WEEKLY_DB_ID` | fetch, prune | Optional: pin the weekly database instead of finding/creating it. |
+| `NOTION_PARENT_PAGE_ID` | fetch, `setup/notion_init.py` | Optional: page to create the weekly database in (new installs). |
 | `NOTION_PRUNE_DAYS` | prune | Default for `--days` (optional). |
+| `VN_DIGEST_STATE` | fetch, prune | Tracking file path (default `.state/state.json`). |
+
+## Tests
+
+```bash
+.venv/bin/pip install pytest && .venv/bin/python -m pytest -q
+```
+Offline (no network): publish timing, the tracking file, voz parsing (against a
+saved real page) and weekly-gain math, the Notion guard, and whole runs against
+a fake Notion.
 
 ## Troubleshooting
 
-- **voz returns 0 / "browser path failed"** — Cloudflare blocked the headless
-  browser from that IP; the fetcher falls back to voz RSS automatically. Skim the
-  Action log; if it persists from GitHub's datacenter IP, voz will show as
-  "Latest" instead of "Top".
-- **`NOTION_TOKEN and NOTION_DB_ID must be set`** — you didn't source
-  `.env.local` (or the GitHub secrets aren't set).
-- **Nothing in Notion but the run said "created N"** — make sure the integration
-  is connected to the page/database (SETUP step 3) and you're using the right
-  `NOTION_DB_ID`.
+- **voz failed / "could not load ..."**: Cloudflare blocked the headless
+  browser. Each page is retried in a fresh browser session; a run where voz
+  fails just records nothing, and the weekly list uses the counts from the
+  other runs. After 4 failed runs in a row the run turns red.
+- **`NOTION_TOKEN must be set`**: you didn't source `.env.local` (or the GitHub
+  secrets aren't set). Use `--dry-run` to test without Notion.
+- **"refusing to touch the original database"**: `NOTION_WEEKLY_DB_ID` is set
+  to the original database's id. Unset it (the weekly database is found or
+  created automatically).
+- **Can't find the new database:** it's on the same Notion page as the original
+  one, titled "VN Digest Weekly". The first run's log prints its URL.

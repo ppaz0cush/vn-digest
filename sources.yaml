@@ -1,95 +1,63 @@
-# VN Digest — source configuration.
+# VN Digest — source configuration (weekly digest).
 #
-# THIS FILE is the "add/delete forums" mechanism. To add a voz sub-forum or
-# another feed, edit this file and commit. The fetcher reads it on every run.
+# THIS FILE is the "add/remove sources" mechanism; the fetcher reads it on
+# every run. Two kinds of source:
 #
-# Recency windows follow the rule:
-#   - high-volume + ranked sources use a SHORT window (~previous day) so you get
-#     TODAY's most-discussed, not week-old posts (engagement counts accumulate
-#     over time, so a long window surfaces stale items).
-#   - low-volume "get all" sources use a LONG window (7-14 days) so the section
-#     is not empty on days they didn't post.
-# Adjust window_hours / max_items per source freely.
+#   mode: weekly_top  tracked all week; the first run after the `publish:` time
+#                     writes the top N (`top:`) to Notion.
+#   mode: all         every new post is written to Notion as soon as a run
+#                     sees it. A post is written once; pruning it doesn't
+#                     bring it back.
+#
+# Runs happen 4x a day (.github/workflows/fetch.yml). Everything is written to
+# the "VN Digest Weekly" Notion database; the original database is never touched.
+
+publish:
+  weekday: monday          # the first run after this weekday + hour publishes
+  hour: 3                  # 03:00 local time
+  timezone: Asia/Ho_Chi_Minh
 
 sources:
   - name: voz
-    # Set the sub-forum(s) you want. Find the slug.id by opening the sub-forum on
-    # voz.vn and copying it from the URL, e.g. voz.vn/f/<slug>.<id>/
-    # Default below targets the "Điểm báo" (press/news) section. The generic
-    # site-wide feed is a noisy firehose — target the sections you actually want.
-    # voz fronts its HTML listing with a Cloudflare JS "managed challenge" that
-    # plain HTTP (requests/curl) cannot solve. We drive a headless browser
-    # (Playwright/Chromium) which executes the challenge JS, then rank the
-    # recently-active threads by views/replies client-side -> real 'Top by
-    # views'. If Playwright is missing or the challenge isn't solved, the fetcher
-    # falls back to the per-forum RSS (chronological) and relabels voz 'Latest'.
-    # Enable ranked voz:  pip install playwright && python -m playwright install chromium
-    use_browser: true       # set false to use RSS only (no browser dependency)
-    skip_sticky: true       # ignore pinned megathreads (they'd top views forever)
-    # trending: rank by views GAINED since the previous run (~24h on the daily
-    # cron) instead of lifetime totals, so a long-running thread bumped today
-    # doesn't outrank genuinely hot ones. New threads rank by their current
-    # count (their views are all recent). Set false to rank by lifetime totals.
-    trending: true
-    # Forums to pull from. Format: '<slug>.<id>' for normal /f/ forums, or
-    # '<type>/<slug>.<id>' for other node types (voz's /s/ nodes). Find a
-    # slug.id by opening the forum on voz.vn and copying it from the URL.
+    mode: weekly_top
+    # Ranked by views GAINED this week. Each run reads every forum's own list
+    # "updated in the last 7 days, sorted by views" in a headless browser (voz
+    # sits behind Cloudflare) and records the counts.
+    top: 20                # top 20 across all forums below
+    # Forum format: '<slug>.<id>' for normal /f/ forums, or '<type>/<slug>.<id>'
+    # for other node types (voz's /s/ nodes). Copy it from the forum's URL.
     forums:
       - "diem-bao.33"               # Điểm báo (news)
       - "chuyen-tro-linh-tinh.17"   # Chuyện trò linh tinh™ (very high traffic)
-      - "from-f17-with-love.69"     # from f17 with love
-    rank: top
-    rank_by: views          # 'views' is harder to game than 'replies' (bumping)
-    per_forum_items: 3      # keep the 3 MOST-RECENTLY-ACTIVE threads per forum
-                            # (small capture so each forum contributes evenly)
-    window_hours: 24        # keep threads ACTIVE in the last 24h
-    max_items: 9            # overall voz cap (3 forums × 3)
-    label: "Top"
-
-  # (dailydev removed — its unauthenticated feed was a frozen all-time-popular
-  # snapshot with stale dates, not a live daily feed.)
+      - "from-f17-with-love.69"     # from f17 with love (love, marriage, family)
+    max_pages: 8           # per forum per run; reading stops once totals drop
+                           # below the current 20th-best gain
+    skip_sticky: true      # ignore pinned threads
+    max_views: 999999      # voz shows 1M+ as "1M", "3M": their weekly gain
+                           # can't be measured, so those threads are skipped
 
   - name: tinhte
-    url: "https://tinhte.vn/rss"
-    rank: top
-    rank_by: comments       # comment count is in the RSS via <slash:comments>
-    trending: true          # rank by comments GAINED since last run (still-hot)
-    tiebreak: published_desc
-    window_hours: 24
-    max_items: 1
-    label: "Top"
+    mode: weekly_top
+    url: "https://tinhte.vn/rss"   # ~1 day of articles, with comment counts
+    top: 2                 # most-commented articles published this week
+    refresh_top: 10        # re-check this many candidates' counts at publish
 
   - name: vnexpress
-    url: "https://vnexpress.net/rss/so-hoa.rss"
-    rank: top
-    rank_by: comments       # via the comment-count API (RSS has no counts)
-    trending: true          # rank by comments GAINED since last run (still-hot)
-    tiebreak: published_desc
-    window_hours: 24
-    max_items: 1            # top single item from the 24h window
-    label: "Top"
+    mode: weekly_top
+    # "Số hóa" was merged into "Khoa học công nghệ" (the old so-hoa.rss URL
+    # redirects here). Comment counts come from vnexpress's comment API.
+    url: "https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss"
+    top: 2                 # most-commented articles published this week
 
   - name: anonyviet
+    mode: all
     url: "https://anonyviet.com/feed/"
-    rank: latest
-    window_hours: 24       # 7 days (low volume)
-    max_items: 20
-    label: "Latest"
-
-  - name: spiderum
-    # CONFIRMED scope: the "Quan điểm - Tranh luận" category only.
-    category_url: "https://spiderum.com/danh-muc/quan-diem-tranh-luan?sort=new&page_idx=1"
-    post_url_pattern: "https://spiderum.com/bai-dang/{slug}"
-    rank: latest
-    # NOTE: spiderum's listing exposes no post timestamps, so window_hours has no
-    # effect here (dateless items are always kept) — max_items + page order rule.
-    window_hours: 24
-    max_items: 1
-    label: "Latest"
+    lookback_days: 14      # only posts from the last 14 days
 
   - name: engineerpro
+    mode: all
+    # Every post ever: Substack's archive API lists the whole history; the RSS
+    # feed (latest 20) is the fallback.
+    archive_url: "https://engineerprovn.substack.com/api/v1/archive"
     url: "https://engineerprovn.substack.com/feed"
-    rank: latest
-    window_hours: 24       # 14 days — they post only ~2-3x/week
-    max_items: 20
-    label: "Latest"
+    lookback_days: null    # no limit

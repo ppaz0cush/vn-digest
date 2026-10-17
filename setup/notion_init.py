@@ -1,62 +1,23 @@
-"""Create the VN Digest database in Notion with the correct TYPED schema.
+"""Create the "VN Digest Weekly" Notion database by hand (optional).
 
-Run ONCE after you've created the integration and a parent page:
+You normally don't need this: the fetcher creates the database automatically on
+its first run, on the same Notion page as the original database. Use this only
+to create it somewhere else:
 
-    NOTION_TOKEN=ntn_xxx \
-    NOTION_PARENT_PAGE_ID=<page id the integration can access> \
-    python setup/notion_init.py
+    NOTION_TOKEN=ntn_xxx NOTION_PARENT_PAGE_ID=<page id> python setup/notion_init.py
 
-It prints the new database id — set that as NOTION_DB_ID for the fetcher.
-The parent page id is the 32-char id in the page URL (with or without dashes).
+then save the printed id as NOTION_WEEKLY_DB_ID (in .env.local and as a GitHub
+secret). The parent page id is the 32-char id in the page URL; the integration
+must be connected to that page (••• menu -> Connections).
 """
 import os
-import requests
+import sys
+from pathlib import Path
 
-API = "https://api.notion.com/v1"
-NOTION_VERSION = "2022-06-28"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from fetcher.notion import Notion  # noqa: E402
 
-token = os.environ["NOTION_TOKEN"]
 parent = os.environ["NOTION_PARENT_PAGE_ID"].replace("-", "")
-
-headers = {
-    "Authorization": f"Bearer {token}",
-    "Notion-Version": NOTION_VERSION,
-    "Content-Type": "application/json",
-}
-
-schema = {
-    "parent": {"type": "page_id", "page_id": parent},
-    "title": [{"type": "text", "text": {"content": "VN Digest"}}],
-    "properties": {
-        # The Title property is required and must be of type 'title'.
-        "Title": {"title": {}},
-        "URL": {"url": {}},
-        # multi_select so a row can carry both the source and its sub-forum,
-        # e.g. ["voz", "diem bao"] -> filter by either.
-        "Source": {"multi_select": {}},
-        "Label": {"select": {}},
-        "Status": {"select": {"options": [
-            {"name": "New", "color": "yellow"},
-            {"name": "Read", "color": "gray"},
-            {"name": "Saved", "color": "green"},
-            {"name": "Skipped", "color": "red"},
-        ]}},
-        "Score": {"number": {}},
-        "Δ today": {"number": {}},
-        "Prev score": {"number": {}},
-        "Rank": {"number": {}},
-        "Published": {"date": {}},
-        "Fetched": {"date": {}},
-    },
-}
-
-r = requests.post(f"{API}/databases", headers=headers, json=schema, timeout=30)
-if r.status_code >= 300:
-    raise SystemExit(f"Failed to create database {r.status_code}: {r.text}")
-
-db = r.json()
-print("Created database:", db["url"])
-print("\nNOTION_DB_ID =", db["id"])
-print("\nNext: put NOTION_TOKEN + NOTION_DB_ID in .env.local, then run:")
-print("  set -a; . ./.env.local; set +a")
-print("  python -m fetcher.main")
+db_id = Notion(original_db_id="").create_database(parent)
+print("\nNOTION_WEEKLY_DB_ID =", db_id)
+print("\nNext: put it in .env.local and run:  gh secret set NOTION_WEEKLY_DB_ID --body", db_id)

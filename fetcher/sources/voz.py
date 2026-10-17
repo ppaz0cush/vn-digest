@@ -1,35 +1,33 @@
-"""voz — rank a sub-forum by views/replies.
+"""voz — weekly "most views gained" across the configured forums.
 
-voz fronts its SORTED HTML listing with a Cloudflare JS "managed challenge"
-that a plain HTTP client cannot solve (curl/requests get the "Just a moment"
-interstitial, never the threads). To get the ranked listing we drive a real
-headless browser (Playwright/Chromium), which executes the challenge JS, then
-parse the resulting HTML for view/reply counts. This is the only free way to
-get "Top by views/comments" for voz.
+voz serves its thread lists behind Cloudflare, which blocks plain HTTP, so a
+headless Chromium (Playwright) renders them. Every run reads each forum's own
+list "updated in the last 7 days, sorted by views":
 
-Fallback chain per forum:
-  1. browser-rendered sorted listing  -> ranked 'Top' (views or replies)
-  2. per-forum RSS (not challenged)    -> chronological 'Latest'
-  3. nothing                            -> skip (run continues)
+    https://voz.vn/f/<slug>.<id>/page-<n>?last_days=7&order=view_count&direction=desc
 
-Enable the browser path with `use_browser: true` in sources.yaml (default for
-voz). Requires `playwright` + `python -m playwright install chromium`. If
-Playwright is unavailable or the challenge isn't solved, it degrades to RSS.
+and records every (non-pinned) thread's view count in the tracking state.
+Pages are read until the lowest total on a page is below the current N-th best
+weekly gain: a thread can't gain more views in a week than it has in total, so
+nothing that could still make the top N is skipped (max_pages caps the work).
+
+At publish, gain = views now - views at the last publish. Threads started
+during the week count all their views; threads first seen mid-week count from
+when they were first seen. voz rounds view counts ("41K", "3M"), so threads
+above max_views (shown in whole millions) are left out: their weekly gain
+can't be measured.
 """
 import re
-import feedparser
+import time
+from datetime import datetime, timezone
+
 from bs4 import BeautifulSoup
 
-from ..http import get
-from ..util import parse_date, struct_time_to_utc
+from ..util import from_iso, parse_date, to_iso
 
-# Default forum listing = most-recently-active threads first. We deliberately do
-# NOT use ?order=view_count: that returns all-time top threads, which are mostly
-# stale and get stripped by the recency window. Instead we take the recently
-# active threads and rank THOSE by views/replies client-side (rank.py) — i.e.
-# "most-viewed among threads active in the window", which is what 'Top' means here.
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+LIST_QUERY = "last_days=7&order=view_count&direction=desc"
 
 
 def _split_forum(forum):
@@ -43,14 +41,9 @@ def _split_forum(forum):
     return node_type, slug
 
 
-def _listing_url(forum):
+def listing_url(forum, page=1):
     t, s = _split_forum(forum)
-    return f"https://voz.vn/{t}/{s}/"
-
-
-def _rss_url(forum):
-    t, s = _split_forum(forum)
-    return f"https://voz.vn/{t}/{s}/index.rss"
+    return f"https://voz.vn/{t}/{s}/{'' if page == 1 else f'page-{page}'}?{LIST_QUERY}"
 
 
 def _forum_label(forum):
@@ -65,6 +58,11 @@ def _unread(thread_url):
     m = re.match(r"(https?://voz\.vn/t/[^/]+\.\d+)", thread_url or "")
     base = m.group(1) if m else (thread_url or "").rstrip("/")
     return f"{base}/unread" if base else thread_url
+
+
+def _thread_id(url):
+    m = re.search(r"/t/[^/?#]*\.(\d+)", url or "")
+    return m.group(1) if m else None
 
 
 def _count(text):
@@ -84,26 +82,30 @@ def _count(text):
     return int(digits) if digits else None
 
 
-def _parse(html, forum, rank_by="views", skip_sticky=True):
-    soup = BeautifulSoup(html, "lxml")
-    items = []
-    for row in soup.select("div.structItem--thread"):
-        # Pinned/sticky threads (rules, megathreads) have huge all-time view
-        # counts and would always top a view ranking — skip them so "Top by
-        # views" reflects actual news. Set skip_sticky: false to keep them.
-        if skip_sticky and row.select_one(".structItem-status--sticky"):
-            continue
+def _time(el):
+    """A XenForo <time>: exact unix data-timestamp when present, else parse."""
+    if el is None:
+        return None
+    ts = el.get("data-timestamp")
+    if ts and str(ts).isdigit():
+        return datetime.fromtimestamp(int(ts), tz=timezone.utc)
+    return parse_date(el.get("datetime") or el.get("title") or el.get_text(strip=True))
 
-        title_a = row.select_one(".structItem-title a[href*='/t/']") \
-            or row.select_one(".structItem-title a")
+
+def parse_listing(html, forum):
+    """Thread rows of a forum list page -> list of dicts (pinned ones flagged)."""
+    soup = BeautifulSoup(html, "lxml")
+    threads = []
+    for row in soup.select("div.structItem--thread"):
+        title_a = row.select_one(".structItem-title a[href*='/t/']")
         if not title_a:
             continue
         href = title_a.get("href", "")
         title = title_a.get_text(strip=True)
-        if not href or not title:
-            continue
         url = href if href.startswith("http") else f"https://voz.vn{href}"
-
+        tid = _thread_id(url)
+        if not tid or not title:
+            continue
         views = replies = None
         for dl in row.select(".structItem-cell--meta dl"):
             dt, dd = dl.select_one("dt"), dl.select_one("dd")
@@ -115,136 +117,170 @@ def _parse(html, forum, rank_by="views", skip_sticky=True):
                 views = num
             elif "repl" in label or "trả lời" in label:
                 replies = num
-
-        # last-activity time = the dedicated .structItem-latestDate (NOT the
-        # first <time>, which is the thread's start date).
-        time_el = row.select_one(".structItem-latestDate")
-        if not time_el:
-            times = row.select("time")
-            time_el = times[-1] if times else None
-        published = None
-        if time_el:
-            published = parse_date(time_el.get("datetime") or time_el.get("title")
-                                   or time_el.get_text(strip=True))
-
-        # Score on the configured engagement metric (so rank.py sorts by it).
-        if rank_by == "replies":
-            score, stype = replies, "replies"
-        else:
-            score, stype = views, "views"
-        items.append({
-            "url": _unread(url),                 # deep-link to first unread post
+        threads.append({
+            "id": tid,
+            "url": _unread(url),                  # deep-link to first unread post
             "title": title,
-            "source_detail": f"voz · {forum}",
-            "subsource": _forum_label(forum),    # e.g. "diem bao" (multi-select tag)
-            "published_at": published,
-            "score": score,
-            "score_type": stype,
-            "metadata": {"views": views, "replies": replies},
+            "forum": forum,
+            "subsource": _forum_label(forum),     # e.g. "diem bao" (Notion tag)
+            "views": views,
+            "replies": replies,
+            "started_at": _time(row.select_one(".structItem-startDate time")),
+            "last_post_at": _time(row.select_one(".structItem-latestDate")),
+            "sticky": row.select_one(".structItem-status--sticky") is not None,
         })
-    return items
+    return threads
 
 
-def _fetch_html_browser(forum, attempts=2):
-    """Render the Cloudflare-challenged listing with headless Chromium."""
-    from playwright.sync_api import sync_playwright  # lazy: optional dependency
+class Browser:
+    """Headless Chromium. Each page gets a fresh browser context: voz's
+    Cloudflare challenges a second navigation in the same session, but lets a
+    fresh one straight through."""
 
-    url = _listing_url(forum)
-    last_err = None
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+    def __init__(self, pause=2.0):
+        self.pause = pause
+
+    def __enter__(self):
+        from playwright.sync_api import sync_playwright  # lazy: heavy dependency
+        self._pw = sync_playwright().start()
         try:
-            for attempt in range(1, attempts + 1):
-                ctx = browser.new_context(locale="vi-VN", user_agent=BROWSER_UA)
-                page = ctx.new_page()
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                    # Cloudflare auto-solves the managed challenge, then the
-                    # thread rows appear. Wait for them.
-                    page.wait_for_selector("div.structItem--thread", timeout=30000)
-                    return page.content()
-                except Exception as exc:
-                    last_err = exc
-                    if attempt < attempts:
-                        page.wait_for_timeout(4000)  # let the challenge settle, retry
-                finally:
-                    ctx.close()
-        finally:
-            browser.close()
-    raise RuntimeError(f"challenge not solved after {attempts} tries: {last_err}")
+            self._browser = self._pw.chromium.launch(headless=True)
+        except Exception:
+            self._pw.stop()
+            raise
+        return self
 
-
-def _from_rss(forum):
-    """Fallback: per-forum RSS is NOT challenged, but chronological (no counts)."""
-    resp = get(_rss_url(forum), timeout=25, browser=True)
-    resp.raise_for_status()
-    feed = feedparser.parse(resp.content)
-    items = []
-    for e in feed.entries:
-        link, title = e.get("link"), (e.get("title") or "").strip()
-        if not link or not title:
-            continue
-        items.append({
-            "url": _unread(link),
-            "title": title,
-            "source_detail": f"voz · {feed.feed.get('title') or forum}",
-            "subsource": _forum_label(forum),
-            "published_at": struct_time_to_utc(e.get("published_parsed"))
-                            or parse_date(e.get("published")),
-            "score": None,
-            "score_type": None,
-        })
-    return items
-
-
-def fetch(cfg):
-    rank_by = cfg.get("rank_by", "views")
-    use_browser = cfg.get("use_browser", True)
-    # Keep the N MOST-RECENTLY-ACTIVE threads per forum (the listing is already
-    # in last-activity order). Capturing active threads — not just the highest
-    # all-time-view ones — means rising topics get a stored baseline early, so
-    # we don't lose them (they may surface a day or two later). Also stops one
-    # busy forum from crowding out the others.
-    per_forum = cfg.get("per_forum_items")
-    all_items, ranked_items = [], 0
-
-    for forum in cfg.get("forums", []):
-        if "REPLACE_WITH" in forum:
-            print(f"[voz] skipping placeholder forum {forum!r}; set a real slug.id")
-            continue
-
-        # 1) ranked HTML via headless browser (Top by views/replies)
-        if use_browser:
+    def get(self, url, attempts=3):
+        last = None
+        for attempt in range(1, attempts + 1):
+            time.sleep(self.pause if attempt == 1 else 5 * attempt)
+            ctx = self._browser.new_context(locale="vi-VN", user_agent=BROWSER_UA)
             try:
-                parsed = _parse(_fetch_html_browser(forum), forum,
-                                rank_by=rank_by,
-                                skip_sticky=cfg.get("skip_sticky", True))
-                if parsed:
-                    if per_forum:
-                        parsed = parsed[:per_forum]   # most-recently-active (listing order)
-                    print(f"[voz] {forum}: {len(parsed)} most-active threads (browser)")
-                    all_items.extend(parsed)
-                    ranked_items += len(parsed)
-                    continue
-                print(f"[voz] {forum}: browser listing empty; trying RSS")
-            except ImportError:
-                print("[voz] Playwright not installed; falling back to RSS. "
-                      "Enable ranked voz: pip install playwright && python -m playwright install chromium")
+                page = ctx.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_selector("div.structItem--thread", timeout=20000)
+                return page.content()
             except Exception as exc:
-                print(f"[voz] {forum}: browser path failed ({exc}); falling back to RSS")
+                last = exc
+            finally:
+                ctx.close()
+        raise RuntimeError(f"could not load {url} ({attempts} tries): {str(last)[:150]}")
 
-        # 2) RSS fallback (chronological 'Latest')
-        try:
-            rss = _from_rss(forum)
-            if per_forum:
-                rss = rss[:per_forum]
-            print(f"[voz] {forum}: {len(rss)} threads from RSS (chronological)")
-            all_items.extend(rss)
-        except Exception as exc:
-            print(f"[voz] {forum}: RSS also failed: {exc}")
+    def __exit__(self, *exc):
+        for close in (self._browser.close, self._pw.stop):
+            try:
+                close()
+            except Exception:
+                pass
 
-    # If we never got ranked data, the items are chronological -> relabel honestly.
-    if all_items and ranked_items == 0:
-        cfg["rank"] = "latest"
-        cfg["label"] = "Latest"
-    return all_items
+
+def _gain(it, week_start):
+    """(views gained this week, baseline used) for a tracked thread."""
+    views = it.get("views")
+    if views is None:
+        return None, None
+    if it.get("base_views") is not None:          # known at the last publish
+        base = it["base_views"]
+    else:
+        started = from_iso(it.get("started_at"))
+        if started is not None and started >= week_start:
+            base = 0                              # started this week: all its views
+        elif it.get("first_seen_views") is not None:
+            base = it["first_seen_views"]         # first seen mid-week
+        else:
+            base = views
+    return max(views - base, 0), base
+
+
+def ranked(items, week_start, max_views=None):
+    """Threads seen this week, best weekly gain first: [(gain, views, item, base)]."""
+    out = []
+    for it in items.values():
+        seen = from_iso(it.get("last_seen_at"))
+        if seen is None or seen < week_start:
+            continue
+        if max_views is not None and (it.get("views") or 0) > max_views:
+            continue
+        gain, base = _gain(it, week_start)
+        if gain:
+            out.append((gain, it.get("views") or 0, it, base))
+    out.sort(key=lambda r: (r[0], r[1]), reverse=True)
+    return out
+
+
+def _record(items, t, now):
+    it = items.get(t["id"])
+    if it is None:
+        it = items[t["id"]] = {"first_seen_at": to_iso(now), "first_seen_views": t["views"],
+                               "base_views": None}
+    elif it.get("first_seen_views") is None:
+        it["first_seen_views"] = t["views"]
+    it.update({
+        "url": t["url"], "title": t["title"], "forum": t["forum"], "subsource": t["subsource"],
+        "views": t["views"], "replies": t["replies"],
+        "started_at": to_iso(t["started_at"]) or it.get("started_at"),
+        "last_post_at": to_iso(t["last_post_at"]),
+        "last_seen_at": to_iso(now),
+    })
+
+
+def collect(cfg, src, now, week_start, browser=Browser):
+    """Record the view counts of every thread that could make this week's top N."""
+    items = src["items"]
+    top = cfg.get("top", 20)
+    max_pages = cfg.get("max_pages", 8)
+    max_views = cfg.get("max_views")
+    skip_sticky = cfg.get("skip_sticky", True)
+    current = ranked(items, week_start, max_views)
+    cutoff = current[top - 1][0] if len(current) >= top else 0
+
+    seen_ids, failed, total_pages = set(), [], 0
+    with browser() as br:
+        for forum in cfg.get("forums", []):
+            got = pages = 0
+            for n in range(1, max_pages + 1):
+                try:
+                    html = br.get(listing_url(forum, n))
+                except Exception as exc:
+                    print(f"[voz] {forum} page {n}: {exc}")
+                    if n == 1:
+                        failed.append(forum)
+                    break
+                pages += 1
+                threads = [t for t in parse_listing(html, forum)
+                           if not (skip_sticky and t["sticky"]) and t["id"] not in seen_ids]
+                if not threads:          # past the last page voz repeats the last one
+                    break
+                for t in threads:
+                    seen_ids.add(t["id"])
+                    _record(items, t, now)
+                got += len(threads)
+                lowest = min((t["views"] for t in threads if t["views"] is not None), default=None)
+                if lowest is None or lowest < cutoff:
+                    break
+            print(f"[voz] {forum}: {got} threads from {pages} page(s)")
+            total_pages += pages
+    if failed:
+        raise RuntimeError(f"couldn't load {', '.join(failed)}")
+    return f"{len(seen_ids)} threads from {total_pages} pages (top-{top} cutoff {cutoff:,} views)"
+
+
+def publish(cfg, src, now, week_start):
+    """This week's top N by views gained, as Notion rows."""
+    best = ranked(src["items"], week_start, cfg.get("max_views"))[: cfg.get("top", 20)]
+    return [{
+        "url": it["url"], "title": it["title"], "source": "voz", "subsource": it.get("subsource"),
+        "label": "Top", "score": it.get("views"), "prev_score": base, "delta": gain,
+        "rank": i, "published_at": from_iso(it.get("started_at")), "fetched_at": now,
+    } for i, (gain, _views, it, base) in enumerate(best, start=1)]
+
+
+def after_publish(src, now, week_start):
+    """Start the next week: today's counts become the baselines. Threads not
+    seen all week are forgotten, so a later comeback starts a fresh baseline."""
+    items = src["items"]
+    for key in [k for k, it in items.items()
+                if (from_iso(it.get("last_seen_at")) or now) < week_start]:
+        del items[key]
+    for it in items.values():
+        it["base_views"] = it.get("views")

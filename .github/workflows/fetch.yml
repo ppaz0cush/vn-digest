@@ -1,25 +1,83 @@
 name: daily-fetch
+# Runs 4x a day. Every run records voz / tinhte / vnexpress counts in the
+# tracking file (kept on the `state` branch) and writes new anonyviet /
+# engineerpro posts to Notion. The first run after Monday 03:00 Vietnam time
+# also publishes the weekly lists. Only the "VN Digest Weekly" database is
+# written; the original database is never touched.
 on:
   schedule:
-    - cron: "15 22 * * *"    # 22:15 UTC == 05:15 Asia/Ho_Chi_Minh (UTC+7)
-  workflow_dispatch: {}       # allow manual runs
+    - cron: "15 2,8,14,20 * * *"   # 09:15, 15:15, 21:15, 03:15 Asia/Ho_Chi_Minh (UTC+7)
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the weekly lists now (don't wait for Monday)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: fetch and print only (no Notion writes, state not saved)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # push the tracking file to the `state` branch
+  actions: write    # keepalive: stop GitHub auto-disabling this schedule
+
+concurrency:
+  group: daily-fetch   # one run at a time: runs share the tracking file
+  cancel-in-progress: false
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r fetcher/requirements.txt
-      # Chromium for the voz ranked-listing fetch (solves its Cloudflare JS
-      # challenge). If voz is blocked from the Actions IP, the fetcher falls
-      # back to voz RSS automatically — the run still succeeds.
+      # Chromium renders voz's thread lists (they sit behind Cloudflare).
       - run: python -m playwright install --with-deps chromium
-      - run: python -m fetcher.main
+
+      - name: Load tracking state
+        run: |
+          mkdir -p .state
+          if git fetch --quiet --depth=1 origin state; then
+            git show FETCH_HEAD:state.json > .state/state.json
+            echo "Loaded the tracking state from the 'state' branch."
+          else
+            echo "No 'state' branch yet: starting fresh."
+          fi
+
+      - name: Fetch (publishes the weekly lists after Monday 03:00 VN)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          # The ORIGINAL database: read once to find its Notion page, never written.
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
-          # (Cleanup is manual — see the prune-notion workflow, not auto here.)
+          NOTION_WEEKLY_DB_ID: ${{ secrets.NOTION_WEEKLY_DB_ID }}   # optional override
+          PUBLISH: ${{ inputs.publish }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python -m fetcher.main "${args[@]}"
 
-# (registered via push)
+      - name: Save tracking state
+        if: always() && inputs.dry_run != true && hashFiles('.state/state.json') != ''
+        run: |
+          export GIT_AUTHOR_NAME="github-actions[bot]" GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
+          export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+          blob=$(git hash-object -w .state/state.json)
+          tree=$(printf '100644 blob %s\tstate.json\n' "$blob" | git mktree)
+          commit=$(git commit-tree "$tree" -m "Tracking state $(date -u +%Y-%m-%dT%H:%MZ)")
+          # A single commit, replaced every run: the branch never grows.
+          git push --quiet --force origin "$commit:refs/heads/state"
+
+      # GitHub disables schedules in public repos after 60 days without
+      # activity (it happened Oct 3-16, 2026); re-enabling resets that clock.
+      - name: Keep the schedule alive
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/fetch.yml/enable" || echo "keepalive call failed (not fatal)"

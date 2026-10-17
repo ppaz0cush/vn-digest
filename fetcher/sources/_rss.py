@@ -26,7 +26,7 @@ def entry_published(e):
 
 def latest(cfg):
     """Plain chronological feed -> items with no engagement score.
-    main.py applies the window/sort/cap; label is 'Latest'."""
+    main.py applies the source's look-back window."""
     feed = fetch_feed(cfg["url"])
     items = []
     for e in feed.entries:

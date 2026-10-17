@@ -1,7 +1,7 @@
 """Shared HTTP session with a polite, identifiable User-Agent."""
 import requests
 
-USER_AGENT = "vn-digest/1.0 (+https://github.com/; personal daily digest)"
+USER_AGENT = "vn-digest/1.0 (+https://github.com/; personal weekly digest)"
 
 # A browser-ish UA used only as a fallback for sites (e.g. voz/Cloudflare) that
 # reject unknown agents. Kept separate so default traffic stays honest.

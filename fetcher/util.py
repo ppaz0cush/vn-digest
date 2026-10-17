@@ -24,6 +24,18 @@ def parse_date(value):
         return None
 
 
+def to_iso(dt):
+    """UTC ISO-8601 string for a datetime (None stays None)."""
+    return to_utc(dt).isoformat() if dt else None
+
+
+def from_iso(value):
+    """Inverse of to_iso: ISO-8601 string -> UTC datetime (None stays None)."""
+    if not value:
+        return None
+    return to_utc(datetime.fromisoformat(str(value).replace("Z", "+00:00")))
+
+
 def struct_time_to_utc(st):
     """Convert a feedparser time.struct_time (UTC) to a UTC datetime."""
     if not st:
