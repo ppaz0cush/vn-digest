@@ -90,10 +90,16 @@ class State:
     def weekly_db_id(self, value):
         self.data["weekly_db_id"] = value
 
-    def record_result(self, name, ok):
-        """Track consecutive failures per source; returns the current streak."""
+    def record_result(self, name, ok, now=None, error=None):
+        """Track consecutive failures per source (returns the streak). The last
+        error is kept in the file, so a failure can be read on the `state`
+        branch without the run logs."""
         src = self.source(name)
         src["failures"] = 0 if ok else src["failures"] + 1
+        if ok and now is not None:
+            src["last_ok_at"] = to_iso(now)
+        if not ok and error is not None:
+            src["last_error"] = {"at": to_iso(now) if now else None, "error": str(error)[:500]}
         return src["failures"]
 
     def prune(self, now, keep_days=KEEP_ITEMS_DAYS):

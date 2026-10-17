@@ -37,9 +37,10 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 - Each thread row gives: thread id, title, link (rewritten to **`/unread`** so
   clicking jumps to your first unread post), views and replies (rounded, e.g.
   `41K`, `3M`), start date and last-post date. Pinned threads are skipped.
-- Pages are read until the lowest view total on a page is below the current
-  20th-best weekly gain (max `max_pages`). A thread can't gain more views than it
-  has in total, so nothing further down can make the list.
+- Pages are read until the lowest view total on a page is below the weekly gain
+  a thread of that forum currently needs to make the list (max `max_pages`). A
+  thread can't gain more views than it has in total, so nothing further down can
+  make the list.
 - Counts are recorded per thread: first seen (time, views), latest views, and
   the baseline set at the last weekly list.
 
@@ -48,8 +49,12 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 - Threads first seen mid-week count from when they were first seen.
 - Threads shown in millions (`max_views`) are skipped: voz rounds them to whole
   millions, so their weekly gain can't be measured.
-- Top 20 across the 3 forums. Then every thread's current views become next
-  week's baseline, and threads not seen all week are forgotten.
+- The 20 places are shared evenly across the forums (`split: even`: 7/7/6), so
+  Điểm báo's news threads, which get by far the most views, can't take every
+  place. Places a forum can't fill go to the best of the rest. (`split:
+  overall` = one ranking across all forums.)
+- Then every thread's current views become next week's baseline, and threads
+  not seen all week are forgotten.
 
 ### tinhte: `sources/tinhte.py` (weekly top 2 by comments)
 - **Every run:** `GET https://tinhte.vn/rss` (about the last day of articles);
@@ -76,8 +81,14 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 - Substack's public archive API
   `https://engineerprovn.substack.com/api/v1/archive?sort=new&offset=<n>&limit=50`
   lists the whole history (articles and podcast episodes, incl. paid-only
-  posts), so the first run writes the full archive and later runs add new
-  posts. If the API fails, the RSS feed (latest 20, same URLs) is used.
+  posts), so the first run writes the full archive and later runs add new posts.
+- **Substack answers GitHub's servers with 403** (a known Substack block since
+  Jan 2024; home networks work). So each archive page is fetched by the first
+  method that works: a direct request → a headless Chromium (gets through if
+  the block is a Cloudflare challenge) → **Jina Reader** (`https://r.jina.ai/<url>`),
+  a free public service that fetches the public URL from its own servers. The
+  run summary says which one worked (`via ...`). The RSS feed (latest 20, same
+  URLs) is the last resort.
 
 ## Notion columns
 

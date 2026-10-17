@@ -90,7 +90,8 @@ def collect_all(cfg, state, target, now):
                 src["created"][r["url"]] = to_iso(now)
     if failed:
         raise RuntimeError(f"{len(failed)} Notion write(s) failed")
-    return f"{len(posts)} posts, {created} new"
+    via = getattr(ALL_SOURCES[name], "last_via", None)
+    return f"{len(posts)} posts, {created} new" + (f" (via {via})" if via else "")
 
 
 def _badge(row):
@@ -174,11 +175,11 @@ def run(args, now=None):
                 detail = WEEKLY_SOURCES[name].collect(cfg, state.source(name), now, week_start)
             else:
                 raise ValueError(f"unknown mode {mode!r} (expected weekly_top or all)")
-            state.record_result(name, True)
+            state.record_result(name, True, now)
             report.append((name, "ok", detail))
         except Exception as exc:
             traceback.print_exc()
-            streak = state.record_result(name, False)
+            streak = state.record_result(name, False, now, f"{type(exc).__name__}: {exc}")
             report.append((name, f"FAILED ({streak} run(s) in a row)", str(exc)[:200]))
             if streak >= FAIL_AFTER_RUNS:
                 ok = False

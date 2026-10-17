@@ -38,6 +38,15 @@ def test_failure_streak():
     assert st.record_result("voz", True) == 0
 
 
+def test_last_error_is_kept_for_debugging():
+    st = State(path="unused")
+    st.record_result("engineerpro", False, vn(2026, 10, 17, 20), "HTTPError: 403 Forbidden")
+    st.record_result("engineerpro", True, vn(2026, 10, 18, 3))
+    src = st.source("engineerpro")
+    assert src["last_error"] == {"at": to_iso(vn(2026, 10, 17, 20)), "error": "HTTPError: 403 Forbidden"}
+    assert src["last_ok_at"] == to_iso(vn(2026, 10, 18, 3)) and src["failures"] == 0
+
+
 def test_prune_forgets_stale_items_but_keeps_created_markers():
     now = vn(2026, 10, 30)
     st = State(path="unused")

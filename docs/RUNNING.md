@@ -63,10 +63,12 @@ disables schedules in public repos after 60 days without activity.
 
 A small JSON file with everything the weekly ranking needs: view/comment counts
 seen this week, when the last list went out, which posts were already written,
-and the weekly database's id. In CI it lives on the repo's **`state` branch**
+the weekly database's id, and per source its failure streak, `last_ok_at` and
+`last_error` (time + message). In CI it lives on the repo's **`state` branch**
 (`state.json`, a single commit replaced every run, so the branch never grows).
 The workflow copies it to `.state/state.json` before a run and pushes it back
-after. You can open it on GitHub to see why something ranked.
+after. You can open it on GitHub to see why something ranked, or why a source
+failed, without reading the run logs.
 
 Locally the fetcher uses its own `.state/state.json` (gitignored). It's
 separate from CI's, but rows are keyed by URL, so local runs never duplicate
@@ -121,6 +123,12 @@ a fake Notion.
   browser. Each page is retried in a fresh browser session; a run where voz
   fails just records nothing, and the weekly list uses the counts from the
   other runs. After 4 failed runs in a row the run turns red.
+- **engineerpro failed**: Substack blocks GitHub's servers, so it depends on
+  the browser / Jina Reader fallbacks (see [SOURCES.md](SOURCES.md)). The error
+  of each method is in `last_error` in `state.json` on the `state` branch.
+- **Only Điểm báo threads in the voz list**: check `split: even` in
+  `sources.yaml`. Also, the first list after setup only counts threads started
+  that week, because older threads have no earlier count to compare against yet.
 - **`NOTION_TOKEN must be set`**: you didn't source `.env.local` (or the GitHub
   secrets aren't set). Use `--dry-run` to test without Notion.
 - **"refusing to touch the original database"**: `NOTION_WEEKLY_DB_ID` is set
