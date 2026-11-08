@@ -79,11 +79,15 @@ tinh™** (`chuyen-tro-linh-tinh.17`, general chat) and **from f17 with love**
 
 ### engineerpro: `sources/engineerpro.py` (every post, ever)
 - Substack's public archive API
-  `https://engineerprovn.substack.com/api/v1/archive?sort=new&offset=<n>&limit=50`
+  `https://engineerprovn.substack.com/api/v1/archive?sort=new&limit=25`
   lists the whole history (articles and podcast episodes, incl. paid-only
   posts), so the first run writes the full archive and later runs add new posts.
-  It's paged until an empty page: a short page isn't the end (the first page
-  stops at 23 posts whatever the `limit`).
+  Each page is `{"posts": [...], "nextCursor": "..."}` with at most 25 posts;
+  the next page is `&cursor=<nextCursor>`, until `nextCursor` is null. (Since
+  Nov 2026 the old `offset=` paging and a `limit` over 25 are rejected with a
+  400; Jina Reader relays that error with a 200, so any response without a
+  `posts` list counts as a failed fetch, and an archive with no posts falls
+  back to the RSS feed.)
 - **Substack answers GitHub's servers with 403** (a known Substack block since
   Jan 2024; home networks work). So each archive page is fetched by the first
   method that works (starting with the one that worked for the previous page):
